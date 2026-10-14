@@ -1,1 +1,1 @@
-# vet-clinic-management-backend
+# vet-clinic-management
