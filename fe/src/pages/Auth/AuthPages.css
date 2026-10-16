@@ -1,0 +1,32 @@
+/* Thẻ biểu mẫu đăng nhập / đăng ký. Bố cục chia đôi màn hình nằm ở components/layout/AuthLayout.css. */
+
+.auth-card { width: min(100%, 485px); }
+.auth-card-register { width: min(100%, 570px); }
+.auth-heading { margin-bottom: 30px; }
+.auth-heading-icon { width: 48px; height: 48px; margin-bottom: 17px; display: grid; place-items: center; border: 2px solid var(--color-border); border-radius: 15px; background: #fff0e6; box-shadow: 4px 4px 0 rgba(48, 42, 52, .08); font-size: 22px; }
+.auth-heading h2 { margin: 0 0 8px; font-size: 37px; letter-spacing: -1.1px; }
+.auth-heading p { margin: 0; color: var(--color-muted); }
+
+.auth-form { display: flex; flex-direction: column; gap: 18px; }
+.auth-name-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+.check-option { display: flex; align-items: flex-start; gap: 9px; color: var(--color-muted); font-size: 13px; line-height: 1.5; cursor: pointer; }
+.check-option input { width: 17px; height: 17px; margin: 1px 0 0; flex: 0 0 auto; accent-color: var(--color-primary); }
+.terms-option strong { color: var(--color-primary-dark); }
+.form-error { margin: 0; }
+
+.auth-submit { width: 100%; min-height: 54px; display: flex; align-items: center; justify-content: center; gap: 11px; border: 3px solid var(--color-border); border-radius: 13px; color: #fff; background: var(--color-primary); box-shadow: 5px 5px 0 rgba(48, 42, 52, .2); font-weight: 800; cursor: pointer; transition: transform 170ms ease, background 170ms ease, box-shadow 170ms ease; }
+.auth-submit:hover:not(:disabled) { transform: translate(-2px, -2px); background: var(--color-primary-dark); box-shadow: 7px 7px 0 rgba(48, 42, 52, .17); }
+.auth-submit:disabled { opacity: .6; cursor: not-allowed; }
+
+.auth-switch { margin: 26px 0 0; color: var(--color-muted); font-size: 14px; text-align: center; }
+.auth-switch a { color: var(--color-primary-dark); font-weight: 800; text-decoration: none; }
+.auth-switch a:hover { text-decoration: underline; }
+
+@media (max-width: 760px) {
+  .auth-card, .auth-card-register { width: min(100%, 540px); margin-inline: auto; }
+}
+
+@media (max-width: 520px) {
+  .auth-heading h2 { font-size: 32px; }
+  .auth-name-grid { grid-template-columns: 1fr; gap: 18px; }
+}

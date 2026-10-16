@@ -1,0 +1,10 @@
+.auth-field { display: flex; flex-direction: column; gap: 8px; color: var(--color-text); font-size: 14px; font-weight: 800; }
+.auth-field-control { position: relative; }
+.auth-field input { width: 100%; height: 52px; padding: 0 15px; border: 2px solid rgba(48, 42, 52, .22); border-radius: 12px; outline: none; color: var(--color-text); background: #fff; transition: border-color 160ms ease, box-shadow 160ms ease; }
+.auth-field input.has-trailing { padding-right: 64px; }
+.auth-field input::placeholder { color: #aaa2ab; }
+.auth-field input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 4px rgba(255, 138, 76, .13); }
+.auth-field input[aria-invalid='true'] { border-color: #cf3d4c; }
+.field-error { color: #b92738; font-size: 12px; font-weight: 700; }
+.password-toggle { position: absolute; right: 8px; top: 50%; padding: 7px 8px; transform: translateY(-50%); border: 0; border-radius: 8px; color: var(--color-primary-dark); background: transparent; font-size: 12px; font-weight: 800; cursor: pointer; }
+.password-toggle:hover { background: #fff1e8; }
