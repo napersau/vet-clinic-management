@@ -1,0 +1,62 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: auth-service
+  autoconfigure:
+    # Xác thực do Gateway đảm nhận; tắt user/password mặc định mà Boot tự sinh
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  datasource:
+    # Instant lưu UTC; TIMESTAMP của MySQL quy đổi theo session time zone nên ép session = UTC
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/pet_clinic_auth_db?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:vetclinic_dev}
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 10000
+  jpa:
+    open-in-view: false        # Giải phóng connection ngay sau khi Service kết thúc
+    hibernate:
+      ddl-auto: validate       # Schema chỉ thay đổi qua docs/schema_init.sql
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+    registry-fetch-interval-seconds: 5
+  instance:
+    prefer-ip-address: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+vetclinic:
+  security:
+    public-paths:
+      - /api/v1/auth/login
+      - /api/v1/auth/refresh
+      - /api/v1/auth/logout
+      - /api/v1/auth/register
+  jwt:
+    secret: ${JWT_SECRET}              # Dùng chung với api-gateway, tối thiểu 32 byte
+    access-token-ttl: 30m
+    refresh-token-ttl: 7d
+  auth:
+    max-login-attempts: 5              # Sai quá số lần này (theo username) thì tạm chặn đăng nhập
+    login-lock-duration: 15m
