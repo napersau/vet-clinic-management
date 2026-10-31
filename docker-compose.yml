@@ -1,0 +1,242 @@
+# Hệ thống Quản lý Phòng khám Thú y - chạy toàn bộ bằng 1 lệnh:
+#   docker compose up -d --build
+# Chế độ dev (mở port MySQL/RabbitMQ/Eureka/Mailpit để chạy service trong IDE):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# Reset CSDL (bắt buộc sau khi sửa docs/schema_init.sql):
+#   docker compose down -v
+#
+# Chỉ api-gateway public port ra ngoài: service con tin header X-User-* do Gateway gắn,
+# nên mở port của chúng = cho phép giả mạo quyền.
+
+name: vetclinic
+
+x-healthcheck-timing: &healthcheck-timing
+  interval: 10s
+  timeout: 5s
+  retries: 15
+  start_period: 40s
+
+x-spring-env: &spring-env
+  # JVM phải ở UTC (xem common-library TimeZones); giờ phòng khám được tính tường minh trong mã
+  TZ: UTC
+  EUREKA_URL: http://service-registry:8761/eureka
+  DB_HOST: mysql-server
+  DB_PORT: "3306"
+  DB_USERNAME: root
+  DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Thiếu MYSQL_ROOT_PASSWORD trong .env}
+  RABBITMQ_HOST: rabbitmq-broker
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:?Thiếu RABBITMQ_USERNAME trong .env}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Thiếu RABBITMQ_PASSWORD trong .env}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
+
+x-spring-service: &spring-service
+  restart: unless-stopped
+  mem_limit: 512m
+  networks: [vetclinic-net]
+
+x-depends-on-infra: &depends-on-infra
+  service-registry:
+    condition: service_healthy
+  mysql-server:
+    condition: service_healthy
+  rabbitmq-broker:
+    condition: service_healthy
+
+services:
+  mysql-server:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Thiếu MYSQL_ROOT_PASSWORD trong .env}
+      TZ: Asia/Ho_Chi_Minh
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # Script chỉ chạy khi volume còn trống -> sửa schema thì phải `docker compose down -v`
+      - ./docs/schema_init.sql:/docker-entrypoint-initdb.d/01-schema_init.sql:ro
+    healthcheck:
+      # Ping qua TCP (127.0.0.1) và kiểm tra bảng cuối cùng của script: trong lúc init, MySQL chỉ mở socket,
+      # nên `mysqladmin ping` sẽ báo healthy quá sớm khi schema chưa tạo xong.
+      test: ["CMD-SHELL", "mysql -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD -e 'SELECT 1 FROM pet_clinic_billing_pharmacy_db.invoice_items LIMIT 1' >/dev/null 2>&1"]
+      <<: *healthcheck-timing
+    networks: [vetclinic-net]
+
+  rabbitmq-broker:
+    image: rabbitmq:3.12-management
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:?Thiếu RABBITMQ_USERNAME trong .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Thiếu RABBITMQ_PASSWORD trong .env}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      <<: *healthcheck-timing
+    networks: [vetclinic-net]
+
+  mailpit:
+    image: axllent/mailpit:v1.21
+    restart: unless-stopped
+    networks: [vetclinic-net]
+
+  service-registry:
+    <<: *spring-service
+    build:
+      context: ./vetclinic-backend
+      args:
+        MODULE: service-registry
+    image: vetclinic/service-registry:latest
+    environment:
+      TZ: UTC
+      EUREKA_HOSTNAME: service-registry
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8761/actuator/health"]
+      <<: *healthcheck-timing
+
+  api-gateway:
+    <<: *spring-service
+    build:
+      context: ./vetclinic-backend
+      args:
+        MODULE: api-gateway
+    image: vetclinic/api-gateway:latest
+    environment:
+      <<: *spring-env
+      JWT_SECRET: ${JWT_SECRET:?Thiếu JWT_SECRET trong .env}
+    ports:
+      - "8080:8080"
+    # Gateway khởi động SAU các service nghiệp vụ để lần lấy danh sách Eureka đầu tiên đã có đủ service:
+    # "api-gateway healthy" nghĩa là cả hệ thống sẵn sàng nhận request.
+    depends_on:
+      service-registry:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      appointment-service:
+        condition: service_healthy
+      clinical-service:
+        condition: service_healthy
+      billing-pharmacy-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      <<: *healthcheck-timing
+
+  auth-service:
+    <<: *spring-service
+    build:
+      context: ./vetclinic-backend
+      args:
+        MODULE: auth-service
+    image: vetclinic/auth-service:latest
+    environment:
+      <<: *spring-env
+      JWT_SECRET: ${JWT_SECRET:?Thiếu JWT_SECRET trong .env}
+    depends_on: *depends-on-infra
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/actuator/health"]
+      <<: *healthcheck-timing
+
+  appointment-service:
+    <<: *spring-service
+    build:
+      context: ./vetclinic-backend
+      args:
+        MODULE: appointment-service
+    image: vetclinic/appointment-service:latest
+    environment:
+      <<: *spring-env
+      BOOKING_VERIFY_PET: ${BOOKING_VERIFY_PET:-true}
+      BOOKING_NO_SHOW_CRON: ${BOOKING_NO_SHOW_CRON:-0 */15 7-21 * * *}
+      BOOKING_PENDING_EXPIRY_CRON: ${BOOKING_PENDING_EXPIRY_CRON:-0 5,20,35,50 7-21 * * *}
+    depends_on: *depends-on-infra
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8082/actuator/health"]
+      <<: *healthcheck-timing
+
+  clinical-service:
+    <<: *spring-service
+    build:
+      context: ./vetclinic-backend
+      args:
+        MODULE: clinical-service
+    image: vetclinic/clinical-service:latest
+    environment:
+      <<: *spring-env
+      IMAGING_DIR: /app/uploads/imaging
+    volumes:
+      - imaging-data:/app/uploads/imaging
+      # Ảnh CĐHA mẫu cho dữ liệu demo trong schema_init.sql (file_url = seed/...); chỉ đọc
+      - ./docs/demo-images:/app/uploads/imaging/seed:ro
+    depends_on: *depends-on-infra
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8083/actuator/health"]
+      <<: *healthcheck-timing
+
+  billing-pharmacy-service:
+    <<: *spring-service
+    build:
+      context: ./vetclinic-backend
+      args:
+        MODULE: billing-pharmacy-service
+    image: vetclinic/billing-pharmacy-service:latest
+    environment:
+      <<: *spring-env
+    depends_on: *depends-on-infra
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8084/actuator/health"]
+      <<: *healthcheck-timing
+
+  notification-service:
+    <<: *spring-service
+    build:
+      context: ./vetclinic-backend
+      args:
+        MODULE: notification-service
+    image: vetclinic/notification-service:latest
+    environment:
+      <<: *spring-env
+      JWT_SECRET: ${JWT_SECRET:?Thiếu JWT_SECRET trong .env}   # kiểm tra JWT trong STOMP CONNECT
+      MAIL_HOST: mailpit
+      MAIL_PORT: "1025"
+    depends_on:
+      service-registry:
+        condition: service_healthy
+      rabbitmq-broker:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8085/actuator/health"]
+      <<: *healthcheck-timing
+
+  # Giao diện web (React + nginx). Trình duyệt gọi API qua Gateway ở http://localhost:8080 (CORS_ALLOWED_ORIGINS phải có origin này).
+  frontend:
+    build:
+      context: ./fe
+      args:
+        REACT_APP_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
+    image: vetclinic/frontend:latest
+    restart: unless-stopped
+    mem_limit: 128m
+    ports:
+      - "3000:80"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    networks:
+      - vetclinic-net
+
+volumes:
+  mysql-data:
+  rabbitmq-data:
+  imaging-data:
+
+networks:
+  vetclinic-net:
