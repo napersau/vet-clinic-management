@@ -1,6 +1,7 @@
 .idea
 .vscode
 build
+duanmau/
 
 node_modules
 .env
