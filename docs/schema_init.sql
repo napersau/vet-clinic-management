@@ -3,7 +3,8 @@
 -- Chỉ chạy khi volume MySQL còn trống (mount vào /docker-entrypoint-initdb.d/). Sửa file này thì phải `docker compose down -v`.
 -- Script không idempotent (MySQL 8 không có CREATE INDEX IF NOT EXISTS).
 --
--- Hiện có: pet_clinic_auth_db (auth-service). Database của các service khác được thêm vào CUỐI file khi chuyển service đó.
+-- Hiện có: pet_clinic_auth_db (auth-service), pet_clinic_appointment_db (appointment-service).
+-- Database của các service khác được thêm vào CUỐI file khi chuyển service đó.
 -- Bảng tạo SAU CÙNG phải trùng với bảng mà healthcheck của mysql-server trong docker-compose.yml kiểm tra.
 -- =====================================================================================================================
 
@@ -72,4 +73,51 @@ CREATE TABLE refresh_tokens (
     KEY idx_refresh_tokens_user (user_id),
     KEY idx_refresh_tokens_token (token),
     CONSTRAINT fk_refresh_tokens_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- PHẦN 2. pet_clinic_appointment_db (appointment-service): appointments, appointment_status_histories
+-- pet_id / owner_id tham chiếu sang database khác (clinical, auth) nên không có khóa ngoại vật lý.
+-- start_time / end_time là giờ địa phương VN, lưu nguyên giá trị (09:00 -> 09:00:00); mốc TIMESTAMP lưu UTC.
+-- ---------------------------------------------------------------------------------------------------------------------
+CREATE DATABASE pet_clinic_appointment_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE pet_clinic_appointment_db;
+
+CREATE TABLE appointments (
+    id               BIGINT      NOT NULL AUTO_INCREMENT,
+    appointment_code VARCHAR(50) NOT NULL,
+    pet_id           BIGINT      NOT NULL,
+    owner_id         BIGINT      NOT NULL,
+    appointment_date DATE        NOT NULL,
+    start_time       TIME        NOT NULL,
+    end_time         TIME        NOT NULL,
+    reason           TEXT        NOT NULL,
+    booking_channel  ENUM ('ONLINE', 'PHONE', 'WALK_IN') NOT NULL DEFAULT 'ONLINE',
+    status           ENUM ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'CANCELLED', 'NO_SHOW') NOT NULL DEFAULT 'PENDING',
+    cancel_reason    TEXT        NULL,
+    confirmed_by     BIGINT      NULL,
+    confirmed_at     TIMESTAMP   NULL DEFAULT NULL,
+    cancelled_by     BIGINT      NULL,
+    cancelled_at     TIMESTAMP   NULL DEFAULT NULL,
+    created_at       TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at       TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY appointment_code (appointment_code),
+    KEY idx_appointments_date_status (appointment_date, status),
+    KEY idx_appointments_owner (owner_id),
+    KEY idx_appointments_pet (pet_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- changed_by_user_id = NULL nghĩa là hệ thống (scheduler tự quét NO_SHOW / tự hủy lịch PENDING quá hạn)
+CREATE TABLE appointment_status_histories (
+    id                 BIGINT    NOT NULL AUTO_INCREMENT,
+    appointment_id     BIGINT    NOT NULL,
+    from_status        ENUM ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'CANCELLED', 'NO_SHOW') NULL DEFAULT NULL,
+    to_status          ENUM ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'CANCELLED', 'NO_SHOW') NOT NULL,
+    changed_by_user_id BIGINT    NULL DEFAULT NULL,
+    notes              TEXT      NULL,
+    created_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_ash_appointment (appointment_id),
+    CONSTRAINT fk_ash_appointment FOREIGN KEY (appointment_id) REFERENCES appointments (id) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;

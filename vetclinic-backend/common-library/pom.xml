@@ -12,12 +12,11 @@
 
     <artifactId>common-library</artifactId>
     <name>common-library</name>
-    <description>ApiResponse, ErrorCode, bảo mật header dùng chung</description>
+    <description>ApiResponse, ErrorCode, bảo mật header, Feign, sự kiện RabbitMQ dùng chung</description>
 
     <!--
-        Mọi dependency web/security đều optional: Gateway (WebFlux) cũng dùng thư viện này,
-        nên các bean servlet chỉ bật khi service thật sự có class tương ứng trên classpath.
-        Feign và RabbitMQ (spring-cloud-starter-openfeign, spring-boot-starter-amqp) thêm vào khi chuyển các service cần tới.
+        Mọi dependency web/security/feign/amqp đều optional: Gateway (WebFlux) cũng dùng thư viện này,
+        nên các bean servlet/feign/rabbit chỉ bật khi service thật sự có class tương ứng trên classpath.
     -->
     <dependencies>
         <dependency>
@@ -49,8 +48,18 @@
             <optional>true</optional>
         </dependency>
         <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-orm</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
             <optional>true</optional>
         </dependency>
     </dependencies>
