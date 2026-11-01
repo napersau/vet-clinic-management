@@ -12,6 +12,7 @@ export const USERS = {
   veterinarian: { id: 3, fullName: 'BS. Phạm An', phoneNumber: '0910000002', email: '', role: 'VETERINARIAN', roomNumber: '1' },
   lab: { id: 4, fullName: 'KTV Xét Nghiệm', phoneNumber: '0910000004', email: '', role: 'LAB_TECHNICIAN', roomNumber: 'XN' },
   imaging: { id: 5, fullName: 'KTV CĐHA', phoneNumber: '0910000005', email: '', role: 'IMAGING_TECHNICIAN', roomNumber: 'CĐHA' },
+  admin: { id: 9, fullName: 'Quản trị viên hệ thống', phoneNumber: '0901234567', email: 'admin@vetclinic.com', role: 'ADMIN' },
 };
 const TOKENS = { accessToken: 'access-1', refreshToken: 'refresh-1' };
 

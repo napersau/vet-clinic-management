@@ -5,6 +5,7 @@ import StaffLayout from '../components/layout/StaffLayout';
 import { CUSTOMER_LINKS, ROUTES, STAFF_AREAS } from '../constants';
 import { useScrollToHash } from '../hooks';
 import {
+  AdminDashboardPage, AdminLabConfigPage, AdminMedicinesPage, AdminReportsPage, AdminServicesPage, AdminSpeciesPage, AdminUsersPage, AdminVisitsPage,
   AppointmentsPage, BookingPage, ComingSoonPage, HomePage, LoginPage, PetDetailPage, PetsPage, ProfilePage, ReceptionAppointmentsPage,
   ParaclinicEntryPage, ParaclinicQueuePage, ReceptionIntakePage, ReceptionQueuePage, RegisterPage, VetHistoryPage, VetMedicinesPage, VetTodayPage, VetVisitPage,
 } from '../pages';
@@ -26,6 +27,14 @@ const IMPLEMENTED = {
   '/vet/medicines': VetMedicinesPage,
   '/lab/queue': LabQueuePage,
   '/imaging/queue': ImagingQueuePage,
+  '/admin/dashboard': AdminDashboardPage,
+  '/admin/users': AdminUsersPage,
+  '/admin/visits': AdminVisitsPage,
+  '/admin/services': AdminServicesPage,
+  '/admin/lab-config': AdminLabConfigPage,
+  '/admin/species': AdminSpeciesPage,
+  '/admin/medicines': AdminMedicinesPage,
+  '/admin/reports': AdminReportsPage,
 };
 
 const guarded = (role, path, fallback) => {
