@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { BOOKING_BENEFITS, BOOKING_STEPS } from '../../constants/home';
 import { ROUTES } from '../../constants/routes';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function BookingSection() {
   const { isAuthenticated } = useAuth();

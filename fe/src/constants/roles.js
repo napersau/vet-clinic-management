@@ -16,3 +16,15 @@ export const ROLE_LABELS = {
   IMAGING_TECHNICIAN: 'Kỹ thuật viên CĐHA',
   PET_OWNER: 'Khách hàng',
 };
+
+// Trang đầu tiên của từng vai trò sau khi đăng nhập.
+export const ROLE_HOME = {
+  ADMIN: '/admin/dashboard',
+  RECEPTIONIST: '/reception/queue',
+  VETERINARIAN: '/vet/today',
+  LAB_TECHNICIAN: '/lab/queue',
+  IMAGING_TECHNICIAN: '/imaging/queue',
+  PET_OWNER: '/portal/profile',
+};
+
+export const getRoleHome = (role) => ROLE_HOME[role] || '/';

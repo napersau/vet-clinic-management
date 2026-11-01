@@ -5,6 +5,8 @@ export { default as SafeImage } from './common/SafeImage';
 
 export { default as AuthField } from './auth/AuthField';
 export { default as PasswordInput } from './auth/PasswordInput';
+export { default as RequireAuth } from './auth/RequireAuth';
+export { default as RequireRole } from './auth/RequireRole';
 
 export { default as Header } from './layout/Header';
 export { default as Footer } from './layout/Footer';

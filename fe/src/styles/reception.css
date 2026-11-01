@@ -1,0 +1,97 @@
+/* Staff console reuses TailAdmin tokens and Outfit, without changing customer styling. */
+.reception-topbar-title { display: flex; flex-direction: column; gap: 3px; margin-right: auto; min-width: 0; }
+.reception-topbar-title strong { font-weight: 500; font-size: 15px; }
+.reception-topbar-title span { color: var(--admin-muted); font-size: 12px; }
+.reception-account-link { display: flex; align-items: center; gap: 10px; }
+.reception-account-copy { display: flex; flex-direction: column; }
+.reception-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-bottom: 26px; }
+.reception-stats > section { padding: 24px; display: flex; align-items: flex-start; gap: 14px; justify-content: space-between; }
+.reception-stats > section > div { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.reception-stats strong { font-size: 30px; font-weight: 600; line-height: 1.3; }
+.reception-stats small, .reception-stats span:not(.reception-stat-icon) { color: var(--admin-muted); font-size: 12px; }
+.reception-stat-icon { border-radius: 12px; padding: 12px; background: var(--admin-brand-soft); color: var(--admin-brand-ink); display: flex; }
+.reception-table-contact { display: flex; flex-direction: column; gap: 6px; }
+.reception-table-contact span { color: var(--admin-muted); font-size: 12px; }
+.reception-badge { display: inline-flex; font-size: 11px; font-weight: 500; background: var(--admin-raised); color: var(--admin-secondary); border-radius: 999px; padding: 5px 10px; white-space: nowrap; }
+.reception-badge.blue { color: var(--admin-brand-ink); background: var(--admin-brand-soft); }
+.reception-badge.green { color: var(--admin-success); background: var(--admin-success-soft); }
+.reception-shell .admin-row-actions a { color: var(--admin-brand-ink); padding: 8px 4px; }
+.reception-shell a:hover { color: var(--admin-brand-ink); }
+.reception-pets-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.reception-pet-list > .reception-pets-grid { padding: 0 24px 24px; }
+.reception-pet-card { padding: 22px; display: flex; flex-direction: column; min-width: 0; }
+.reception-pet-card-heading { display: flex; align-items: center; gap: 14px; }
+.reception-pet-card-heading > div { min-width: 0; }
+.reception-pet-card-heading .customer-pet-avatar { width: 68px; height: 68px; border-radius: 14px; flex-shrink: 0; }
+.reception-pet-card .customer-pet-avatar > span { font-size: 36px; }
+.reception-pet-card h3 { margin: 0 0 3px; font-size: 20px; font-weight: 500; overflow-wrap: anywhere; }
+.reception-pet-card-heading p { font-size: 12px; color: var(--admin-muted); margin: 0 0 8px; overflow-wrap: anywhere; }
+.reception-card-owner { border-top: 1px solid var(--admin-border); padding-top: 16px; margin-top: 18px; display: flex; flex-direction: column; gap: 6px; }
+.reception-card-owner small { color: var(--admin-muted); font-size: 10px; letter-spacing: .07em; }
+.reception-card-owner a { color: var(--admin-text); overflow-wrap: anywhere; }
+.reception-card-owner a span { display: block; color: var(--admin-muted); font-size: 12px; margin-top: 3px; }
+.reception-allergy { font-size: 12px; padding: 12px; border-radius: 8px; background: var(--admin-warning-soft); color: var(--admin-warning); border: 1px solid currentColor; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reception-pet-card .reception-allergy { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.reception-card-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding-top: 18px; margin-top: auto; font-size: 12px; }
+.reception-card-actions a { color: var(--admin-brand-ink); margin-right: auto; }
+.reception-card-actions button { padding: 7px 0; border: 0; background: transparent; color: var(--admin-secondary); }
+.reception-card-actions button:hover { color: var(--admin-brand-ink); }
+.reception-back { display: inline-block; color: var(--admin-muted) !important; margin-bottom: 24px; font-size: 13px; }
+.reception-heading-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.reception-section-title { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 22px; }
+.reception-section-title h2, .reception-detail-panel h2 { font-size: 20px; font-weight: 500; margin: 0; }
+.reception-section-title p { color: var(--admin-muted); font-size: 13px; margin: 5px 0 0; }
+.reception-detail-panel { padding: 24px; margin-bottom: 26px; }
+.reception-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; margin: 24px 0 0; }
+.reception-facts dt { color: var(--admin-muted); font-size: 12px; margin-bottom: 6px; }
+.reception-facts dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.reception-detail-grid { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 24px; align-items: start; }
+.reception-pet-summary { padding: 24px; text-align: center; }
+.reception-pet-summary > .customer-pet-avatar { height: 200px; width: 100%; border-radius: 12px; }
+.reception-pet-summary h2 { margin: 20px 0 5px; font-size: 26px; overflow-wrap: anywhere; }
+.reception-pet-summary p { color: var(--admin-muted); font-size: 12px; overflow-wrap: anywhere; }
+.reception-pet-summary .reception-card-owner { text-align: left; }
+.reception-disclaimer { color: var(--admin-muted); font-size: 13px; line-height: 1.7; }
+.reception-note { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+.reception-info { background: var(--admin-brand-soft); color: var(--admin-brand-ink); padding: 16px; border-radius: 10px; }
+/* Variant overrides are scoped to staff dialogs; the same editor serves the customer portal. */
+.reception-pet-modal { width: min(740px, calc(100% - 30px)); }
+.reception-pet-modal .pet-editor-form { padding: 24px; }
+.reception-pet-modal .pet-photo-editor { background: var(--admin-raised); border-color: var(--admin-input-border); }
+.reception-pet-modal .pet-photo-editor strong { color: var(--admin-text); }
+.reception-pet-modal .pet-status-icon { background: var(--admin-brand-soft); color: var(--admin-brand-ink); }
+.reception-pet-modal .pet-form-intro, .reception-pet-modal .pet-form-disclaimer, .reception-pet-modal .pet-photo-editor p { color: var(--admin-muted); }
+.reception-pet-modal .pet-editor-form h3 { color: var(--admin-text); font: 500 16px/1.5 'Outfit', Arial, sans-serif; border-color: var(--admin-border); }
+.reception-pet-modal .pet-field > label { color: var(--admin-secondary); font-weight: 400; }
+.reception-pet-modal .pet-field :is(input, select, textarea) { border: 1px solid var(--admin-input-border); border-radius: 8px; background: transparent; color: var(--admin-text); box-shadow: none; font: 400 13px 'Outfit', Arial, sans-serif; }
+.reception-pet-modal .pet-field select option { background: var(--admin-surface); }
+.reception-pet-modal .pet-field :is(input, select, textarea):focus { border-color: var(--admin-brand); box-shadow: 0 0 0 3px var(--admin-brand-soft); }
+.reception-pet-modal .pet-button { border: 1px solid var(--admin-input-border); border-radius: 8px; box-shadow: none; font: 500 13px/1.5 'Outfit', Arial, sans-serif; }
+.reception-pet-modal .pet-button.primary { background: var(--admin-brand); color: white; border-color: var(--admin-brand); }
+.reception-pet-modal .pet-button.secondary { background: var(--admin-surface); color: var(--admin-secondary); }
+.reception-pet-modal .pet-button.primary:hover { background: var(--admin-brand-hover); }
+.reception-pet-modal .pet-button.secondary:hover { background: var(--admin-hover); }
+.reception-pet-modal .pet-text-button, .reception-pet-modal .pet-checkboxes label { color: var(--admin-secondary); }
+.reception-pet-modal .pet-field-error { color: var(--admin-error); }
+.reception-pet-modal .pet-field [aria-invalid=true] { border-color: var(--admin-error); }
+.reception-pet-modal .pet-checkboxes input { accent-color: var(--admin-brand); }
+.reception-pet-modal .pet-alert.error { color: var(--admin-error); background: var(--admin-error-soft); border-color: var(--admin-error); }
+.reception-pet-modal .pet-dialog-actions { border-color: var(--admin-border); }
+.reception-pet-modal .pet-status-content { color: var(--admin-text); }
+.reception-owner-field { padding: 16px; border: 1px solid var(--admin-border); background: var(--admin-bg); border-radius: 10px; margin-bottom: 24px; }
+.reception-owner-field strong { font-weight: 500; overflow-wrap: anywhere; }
+.reception-owner-field p { margin: 8px 0 0; font-size: 12px; color: var(--admin-muted); }
+@media (max-width: 1400px) { .reception-pets-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 767px) {
+  .reception-stats { gap: 10px; grid-template-columns: 1fr; }
+  .reception-stats > section { padding: 18px; }
+  .reception-stats strong { font-size: 26px; }
+  .reception-account-copy { display: none; }
+  .reception-topbar-title strong { font-size: 12px; }
+  .reception-topbar-title span { display: none; }
+  .reception-pets-grid, .reception-detail-grid { grid-template-columns: 1fr; }
+  .reception-pet-list > .reception-pets-grid { padding: 0 16px 16px; }
+  .reception-detail-panel, .reception-pet-summary { padding: 20px; }
+  .reception-facts { grid-template-columns: 1fr; }
+  .reception-pet-modal .pet-editor-form { padding: 18px; }
+}

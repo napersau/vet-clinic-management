@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
+import { mapFieldErrors } from '../../api/client';
 import { AuthField, AuthLayout, PasswordInput } from '../../components';
-import { ROUTES } from '../../constants';
+import { ROUTES, getRoleHome } from '../../constants';
 import { useAuth } from '../../hooks';
-import { MIN_PASSWORD_LENGTH, isValidPhone, normalizePhone } from '../../utils';
+import { MIN_PASSWORD_LENGTH, PASSWORD_PATTERN, isValidPhone, normalizePhone } from '../../utils';
 import './AuthPages.css';
 
 const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
-const INITIAL_VALUES ={ fullName: '', phone: '', email: '', password: '', passwordConfirmation: '', terms: false };
+const INITIAL_VALUES = { fullName: '', phone: '', email: '', password: '', passwordConfirmation: '', terms: false };
 
 function validate(values) {
   const errors = {};
@@ -15,18 +16,20 @@ function validate(values) {
   if (!isValidPhone(values.phone)) errors.phone = 'Số điện thoại phải gồm đúng 10 chữ số, bắt đầu bằng 0.';
   if (values.email.trim() && !EMAIL_PATTERN.test(values.email.trim())) errors.email = 'Email chưa đúng định dạng.';
   if (values.password.length < MIN_PASSWORD_LENGTH) errors.password = `Mật khẩu cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự.`;
+  else if (!PASSWORD_PATTERN.test(values.password)) errors.password = 'Mật khẩu dài 8-72 ký tự, gồm ít nhất 1 chữ cái và 1 chữ số.';
   if (values.password !== values.passwordConfirmation) errors.passwordConfirmation = 'Mật khẩu xác nhận chưa khớp.';
   return errors;
 }
 
 export default function RegisterPage() {
-  const { register, isAuthenticated } = useAuth();
+  const { register, user } = useAuth();
   const [values, setValues] = useState(INITIAL_VALUES);
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  if (isAuthenticated) return <Navigate to={ROUTES.HOME} replace />;
+  // Đăng ký xong thì đã đăng nhập (xem AuthContext.register): chuyển về trang đầu của vai trò.
+  if (user) return <Navigate to={user.role === 'PET_OWNER' ? getRoleHome(user.role) : ROUTES.HOME} replace />;
 
   const bind = (field) => ({
     name: field,
@@ -43,15 +46,16 @@ export default function RegisterPage() {
     if (Object.keys(found).length > 0) return;
 
     setSubmitting(true);
-    try {
-      await register({
-        fullName: values.fullName.trim(),
-        phone: normalizePhone(values.phone),
-        email: values.email.trim().toLowerCase(),
-        password: values.password,
-      });
-    } catch (problem) {
-      setSubmitError(problem.message);
+    const result = await register({
+      fullName: values.fullName.trim(),
+      phoneNumber: normalizePhone(values.phone),
+      email: values.email.trim().toLowerCase() || undefined,
+    }, values.password);
+    if (!result.success) {
+      // Lỗi từng trường của backend (vd. số điện thoại đã tồn tại) hiện đúng ô nhập; còn lại hiện chung ở cuối biểu mẫu.
+      const fieldErrors = mapFieldErrors(result, { phoneNumber: 'phone' });
+      setErrors(fieldErrors);
+      setSubmitError(Object.keys(fieldErrors).length ? '' : result.message);
       setSubmitting(false);
     }
   };
@@ -71,7 +75,7 @@ export default function RegisterPage() {
             <AuthField id="register-phone" label="Số điện thoại" type="tel" autoComplete="tel" placeholder="0901 234 567" required {...bind('phone')} />
           </div>
           <AuthField id="register-email" label="Email (không bắt buộc)" type="email" autoComplete="email" placeholder="you@example.com" {...bind('email')} />
-          <PasswordInput id="register-password" label="Mật khẩu" autoComplete="new-password" placeholder={`Tối thiểu ${MIN_PASSWORD_LENGTH} ký tự`} required {...bind('password')} />
+          <PasswordInput id="register-password" label="Mật khẩu" autoComplete="new-password" placeholder="8-72 ký tự, có chữ và số" required {...bind('password')} />
           <PasswordInput id="register-confirmation" label="Xác nhận mật khẩu" autoComplete="new-password" placeholder="Nhập lại mật khẩu" required {...bind('passwordConfirmation')} />
           <label className="check-option terms-option">
             <input type="checkbox" name="terms" checked={values.terms} onChange={(event) => setValues((current) => ({ ...current, terms: event.target.checked }))} required />

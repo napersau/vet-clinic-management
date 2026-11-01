@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { NAV_ITEMS } from '../../constants/home';
 import { ROUTES, homeSection } from '../../constants/routes';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext';
 import useDismiss from '../../hooks/useDismiss';
 import Brand from '../common/Brand';
 import AccountMenu from './AccountMenu';

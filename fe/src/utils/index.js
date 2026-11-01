@@ -1,4 +1,3 @@
-export { SESSION_KEY, getAuthSession, getAccessToken, saveAuthSession, clearAuthSession } from './storage';
-export { MIN_PASSWORD_LENGTH, normalizePhone, isValidPhone, normalizeIdentifier } from './validators';
+export { MIN_PASSWORD_LENGTH, PASSWORD_PATTERN, normalizePhone, isValidPhone, normalizeIdentifier } from './validators';
 export { getInitials } from './format';
-export { getSafeReturnPath } from './navigation';
+export { getSafeReturnPath, resolvePostLoginPath } from './navigation';

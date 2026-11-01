@@ -30,6 +30,12 @@
 .account-identity strong { font-size: 13px; font-weight: 700; line-height: 1.5; }
 .account-identity span:not(.account-avatar) { color: var(--color-muted); font-size: 11px; line-height: 1.5; }
 .account-identity small { color: #a44822; font-size: 10px; }
+.account-links { display: grid; gap: 3px; }
+.account-links > a { display: flex; align-items: center; gap: 12px; padding: 11px 10px; border-radius: 10px; text-decoration: none; font-size: 13px; font-weight: 700; color: #4e424a; }
+.account-links > a > span { display: grid; gap: 5px; }
+.account-links small { font-size: 10px; font-weight: 400; color: #8a7680; }
+.account-links > a:hover { background: #fff0e6; color: #b34b23; }
+.account-logout { padding-top: 6px; margin-top: 6px; border-top: 1px solid #eddfd5; }
 .account-logout > button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 10px; border: 0; border-radius: 10px; background: transparent; font-size: 13px; font-weight: 700; text-align: left; color: #ad473c; cursor: pointer; }
 .account-logout > button:hover { background: #fff0ed; }
 

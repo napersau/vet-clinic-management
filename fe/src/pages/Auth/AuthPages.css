@@ -13,6 +13,8 @@
 .check-option input { width: 17px; height: 17px; margin: 1px 0 0; flex: 0 0 auto; accent-color: var(--color-primary); }
 .terms-option strong { color: var(--color-primary-dark); }
 .form-error { margin: 0; }
+.auth-options { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
+.auth-hint { color: var(--color-muted); font-size: 12px; }
 
 .auth-submit { width: 100%; min-height: 54px; display: flex; align-items: center; justify-content: center; gap: 11px; border: 3px solid var(--color-border); border-radius: 13px; color: #fff; background: var(--color-primary); box-shadow: 5px 5px 0 rgba(48, 42, 52, .2); font-weight: 800; cursor: pointer; transition: transform 170ms ease, background 170ms ease, box-shadow 170ms ease; }
 .auth-submit:hover:not(:disabled) { transform: translate(-2px, -2px); background: var(--color-primary-dark); box-shadow: 7px 7px 0 rgba(48, 42, 52, .17); }
