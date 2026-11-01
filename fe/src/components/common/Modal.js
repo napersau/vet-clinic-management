@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 export default function Modal({ title, id, children, onClose, busy = false, className = '', variant = 'admin', initialFocusRef }) {
   const dialogRef = useRef(null);
@@ -13,10 +14,13 @@ export default function Modal({ title, id, children, onClose, busy = false, clas
       if (trigger?.isConnected) trigger.focus();
     };
   }, [initialFocusRef]);
-  return (
+  // Dựng ở document.body: hộp thoại thường được mở từ bên trong một <form> của trang (vd. tạo khách hàng ngay trong biểu mẫu
+  // tiếp nhận), mà <form> không được lồng nhau.
+  return createPortal(
     <dialog className={`${variant === 'customer' ? 'customer-modal' : 'admin-modal'} ${className}`} ref={dialogRef} aria-labelledby={id} onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}>
       <header><h2 id={id}>{title}</h2><button type="button" className={variant === 'customer' ? 'customer-dialog-close' : 'admin-icon-button'} aria-label="Đóng hộp thoại" disabled={busy} onClick={onClose}>×</button></header>
       {children}
-    </dialog>
+    </dialog>,
+    document.body,
   );
 }

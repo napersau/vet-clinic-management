@@ -11,3 +11,11 @@ export function normalizeUser(user) {
     roomNumber: user.roomNumber || '',
   };
 }
+
+// Mật khẩu tạm cho tài khoản chủ nuôi do lễ tân tạo (UC-10: hệ thống cấp tài khoản). Có đủ chữ hoa, thường, số, ký hiệu.
+export function temporaryPassword() {
+  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  const bytes = new Uint32Array(8);
+  window.crypto.getRandomValues(bytes);
+  return `Pc${Array.from(bytes, (value) => alphabet[value % alphabet.length]).join('')}@${bytes[0] % 90 + 10}`;
+}

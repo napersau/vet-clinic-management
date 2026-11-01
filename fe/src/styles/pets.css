@@ -1,0 +1,12 @@
+/* Ảnh đại diện thú cưng theo loài (hệ thống chưa lưu ảnh thú cưng). Dùng trong cổng khách hàng (customer-shell). */
+.customer-pet-avatar { display: grid; place-items: center; overflow: hidden; background: #fff0e0; }
+.customer-pet-avatar.species-cat { background: #ffe6ef; }
+.customer-pet-avatar.species-rabbit { background: #eee5ff; }
+.customer-pet-avatar.species-bird { background: #e3f1ff; }
+.customer-pet-avatar.species-other { background: #e8f5e7; }
+.customer-pet-avatar > span { font-size: 72px; }
+
+.pet-card-avatar { width: 76px; height: 76px; flex-shrink: 0; border: 2px solid var(--profile-border); border-radius: 20px; }
+.pet-card-avatar > span { font-size: 38px; }
+.pet-detail-avatar { width: 132px; height: 132px; flex-shrink: 0; border: 2px solid var(--profile-border); border-radius: 28px; }
+.pet-detail-avatar > span { font-size: 64px; }

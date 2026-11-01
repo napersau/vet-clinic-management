@@ -105,13 +105,13 @@ describe('đăng nhập', () => {
 
   test('quay lại trang đang xem dở sau khi đăng nhập nếu vai trò được phép vào', async () => {
     mockApi({ '/auth/login': () => success({ ...TOKENS, user: RECEPTIONIST }) });
-    renderAt('/reception/appointments');
+    renderAt('/reception/invoices');
 
     // Chưa đăng nhập: bị đưa về trang đăng nhập.
     expect(await screen.findByRole('heading', { name: 'Đăng nhập' })).toBeInTheDocument();
     signIn('0910000001');
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Lịch hẹn' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Hóa đơn & thanh toán' })).toBeInTheDocument();
   });
 });
 

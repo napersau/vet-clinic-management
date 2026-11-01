@@ -91,6 +91,8 @@ export function FormDialog({ title, id, onClose, onSubmit, submitLabel = 'Lưu',
   useEffect(() => () => { mounted.current = false; }, []);
   const submit = async (event) => {
     event.preventDefault();
+    // Sự kiện React vẫn nổi lên theo cây component dù hộp thoại nằm ở portal: không để form của trang cha nhận nhầm lần submit này.
+    event.stopPropagation();
     if (busy) return;
     setBusy(true); setError('');
     try { await onSubmit(); onClose(); } catch (problem) { if (mounted.current) setError(problem.message || 'Thao tác không thành công.'); } finally { if (mounted.current) setBusy(false); }
