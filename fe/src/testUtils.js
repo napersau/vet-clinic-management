@@ -9,6 +9,9 @@ import AppRoutes from './routes';
 export const USERS = {
   owner: { id: 1, fullName: 'Nguyễn Văn An', phoneNumber: '0920000001', email: 'an@example.com', role: 'PET_OWNER' },
   receptionist: { id: 2, fullName: 'Trần Lễ Tân', phoneNumber: '0910000001', email: '', role: 'RECEPTIONIST' },
+  veterinarian: { id: 3, fullName: 'BS. Phạm An', phoneNumber: '0910000002', email: '', role: 'VETERINARIAN', roomNumber: '1' },
+  lab: { id: 4, fullName: 'KTV Xét Nghiệm', phoneNumber: '0910000004', email: '', role: 'LAB_TECHNICIAN', roomNumber: 'XN' },
+  imaging: { id: 5, fullName: 'KTV CĐHA', phoneNumber: '0910000005', email: '', role: 'IMAGING_TECHNICIAN', roomNumber: 'CĐHA' },
 };
 const TOKENS = { accessToken: 'access-1', refreshToken: 'refresh-1' };
 
@@ -16,6 +19,8 @@ export const pageOf = (items, extra = {}) => ({ items, page: 0, size: 20, totalE
 
 const reply = (status, body) => ({ ok: status < 400, status, text: async () => JSON.stringify(body) });
 export const success = (data, status = 200) => reply(status, { status, errorCode: null, message: 'OK', data });
+/** Phản hồi tải tệp (ảnh CĐHA) dạng blob. */
+export const fileReply = (type = 'image/png') => ({ ok: true, status: 200, blob: async () => new Blob(['x'], { type }), text: async () => '' });
 export const failure = (status, errorCode, message) => reply(status, { status, errorCode, message, data: null });
 
 /**
@@ -28,7 +33,7 @@ export function mockApi(routes) {
     const key = `${init.method || 'GET'} ${parsed.pathname}`;
     const handler = routes[key];
     if (!handler) return failure(404, 'SYS_1004', `Chưa giả lập ${key}`);
-    return handler({ url: parsed, body: typeof init.body === 'string' ? JSON.parse(init.body) : undefined });
+    return handler({ url: parsed, body: typeof init.body === 'string' ? JSON.parse(init.body) : undefined, form: init.body instanceof FormData ? init.body : undefined });
   });
 }
 

@@ -74,7 +74,7 @@ export default function QueuePage() {
           ['Chờ thanh toán', d.active.filter((v) => v.status === 'WAITING_PAYMENT').length, undefined, 'amber'],
           ['Bác sĩ sẵn sàng', d.doctors.filter((doctor) => doctor.status !== 'BUSY').length, `${d.doctors.length} bác sĩ đang hoạt động`, 'green']]} />
         {priority.length > 0 && <div className="ui-alert info" role="status"><span>Bác sĩ {priority.map((doctor) => doctor.fullName).join(', ')} đang giữ <strong>khóa ưu tiên tái khám</strong>: không phân công ca mới cho tới khi bác sĩ mời ca đã có kết quả.</span></div>}
-        <div className="ui-cols">
+        <div className="ui-cols board">
           <Panel title="Hàng đợi chờ khám" subtitle="Phân công bác sĩ cho ca đứng đầu hàng đợi." flush>
             <Table caption="Hàng đợi chờ khám" empty="Hiện không có bệnh nhân nào trong hàng đợi." rows={d.queue} rowClass={(row) => (row.emergency ? 'emergency' : '')} columns={[
               { title: 'Thú cưng', render: (row) => <><strong>{row.petName}</strong>{row.emergency && <span className="ui-emergency"> · CẤP CỨU</span>}<small>{row.speciesName} · {row.visitCode}</small></> },

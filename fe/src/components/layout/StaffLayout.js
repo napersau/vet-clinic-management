@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import AdminIcon from '../admin/AdminIcon';
+import PriorityCallbackDialog from '../vet/PriorityCallbackDialog';
 import { STAFF_AREAS } from '../../constants/navigation';
 import useTheme from '../../hooks/useTheme';
 import '../../styles/admin.css';
@@ -39,6 +40,7 @@ export default function StaffLayout({ title, children, area = 'reception' }) {
         <div className="admin-account"><Link to="/portal/profile" className="reception-account-link" aria-label="Thông tin cá nhân"><span className="admin-avatar">{initial}</span><span className="reception-account-copy"><strong>{user.fullName}</strong><small>{config.accountLabel}</small></span></Link><button type="button" className="admin-icon-button" aria-label="Đăng xuất" onClick={() => { logout(); navigate('/auth/login', { replace: true }); }}><AdminIcon name="logout" /></button></div>
       </header>
       <main id={`${area}-main`} className="admin-main" tabIndex={-1}><div className="admin-breadcrumb"><Link to={config.home}>{config.label.charAt(0).toUpperCase() + config.label.slice(1)}</Link><AdminIcon name="arrow" /><span>{title}</span></div>{children}</main>
+      {area === 'vet' && <PriorityCallbackDialog />}
       <footer className="admin-footer"><span>© 2026 PawCare</span><span>Hệ thống quản lý phòng khám thú y</span></footer>
     </div>
   </div>;

@@ -141,6 +141,20 @@ describe('tiếp đón: khách vãng lai', () => {
     expect(await screen.findByText('Ngô Văn Khách')).toBeInTheDocument();
   });
 
+  test('hộp thoại dựng trong khung giao diện (kế thừa biến màu) và ngoài <form> của trang', async () => {
+    api();
+    renderAt('/reception/intake');
+    await openWalkIn();
+
+    userEvent.click(screen.getByRole('button', { name: '+ Khách hàng mới' }));
+    const dialog = await screen.findByRole('dialog');
+
+    // Biến màu --admin-* khai báo trên .admin-shell; hộp thoại đặt ở document.body sẽ mất màu nền và chữ.
+    expect(dialog.closest('.admin-shell')).not.toBeNull();
+    // <form> không được lồng nhau, và sự kiện submit của hộp thoại không được kích hoạt form cha.
+    expect(dialog.parentElement.closest('form')).toBeNull();
+  });
+
   test('số điện thoại sai định dạng bị chặn ngay trên biểu mẫu', async () => {
     api({ 'POST /api/v1/auth/users': () => success({}, 201) });
     renderAt('/reception/intake');
