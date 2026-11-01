@@ -238,3 +238,65 @@ CREATE TABLE pets (
     KEY idx_pets_species (species_id),
     CONSTRAINT fk_pets_species FOREIGN KEY (species_id) REFERENCES species (id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- PHẦN 3b. pet_clinic_clinical_db - đợt khám (NV1: tiếp nhận, hàng đợi, phân công): pet_visits, pet_visit_status_histories.
+-- Các bảng chỉ định dịch vụ (NV2) và kết quả cận lâm sàng (NV3) thêm tiếp ở cuối file.
+-- ---------------------------------------------------------------------------------------------------------------------
+USE pet_clinic_clinical_db;
+
+-- appointment_id (-> appointment_db), doctor_id / receptionist_id (-> auth_db) là khóa ngoại logic, không có ràng buộc vật lý.
+-- appointment_id UNIQUE chặn một lịch hẹn bị check-in hai lần. version: khóa lạc quan (@Version).
+-- scheduled_at: giờ bắt đầu khung hẹn nếu khách có hẹn check-in đúng khung giờ (ưu tiên 2 của hàng đợi sảnh), NULL nếu vãng lai / đến trễ.
+-- callback_postponed_at: bác sĩ tạm hoãn ca tái khám (EX-10), không còn tính vào Khóa ưu tiên.
+CREATE TABLE pet_visits (
+    id                    BIGINT       NOT NULL AUTO_INCREMENT,
+    visit_code            VARCHAR(50)  NOT NULL,
+    pet_id                BIGINT       NOT NULL,
+    appointment_id        BIGINT       NULL,
+    doctor_id             BIGINT       NULL,
+    receptionist_id       BIGINT       NOT NULL,
+    assigned_room         VARCHAR(20)  NULL,
+    is_emergency          TINYINT(1)   NOT NULL DEFAULT 0,
+    weight_at_visit       DECIMAL(5, 2) NULL,
+    temperature           DECIMAL(4, 1) NULL,
+    initial_symptoms      TEXT         NULL,
+    clinical_notes        TEXT         NULL,
+    diagnosis             TEXT         NULL,
+    treatment_plan        TEXT         NULL,
+    doctor_advice         TEXT         NULL,
+    status                ENUM ('WAITING', 'IN_PROGRESS', 'WAITING_RESULTS', 'RESULTS_READY', 'WAITING_PAYMENT', 'COMPLETED',
+                                'CANCELLED') NOT NULL DEFAULT 'WAITING',
+    cancel_reason         TEXT         NULL,
+    checked_in_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    started_at            TIMESTAMP    NULL DEFAULT NULL,
+    closed_at             TIMESTAMP    NULL DEFAULT NULL,
+    completed_at          TIMESTAMP    NULL DEFAULT NULL,
+    scheduled_at          TIMESTAMP    NULL DEFAULT NULL,
+    callback_postponed_at TIMESTAMP    NULL DEFAULT NULL,
+    version               BIGINT       NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    UNIQUE KEY visit_code (visit_code),
+    UNIQUE KEY appointment_id (appointment_id),
+    KEY idx_visits_pet (pet_id),
+    KEY idx_visits_status (status),
+    KEY idx_visits_doctor_status (doctor_id, status),
+    KEY idx_visits_queue (status, is_emergency, checked_in_at),
+    CONSTRAINT fk_visits_pet FOREIGN KEY (pet_id) REFERENCES pets (id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- changed_by_user_id luôn có giá trị (sự kiện từ service khác mang theo actorUserId, CLAUDE.md §5.1 mục 3)
+CREATE TABLE pet_visit_status_histories (
+    id                 BIGINT    NOT NULL AUTO_INCREMENT,
+    visit_id           BIGINT    NOT NULL,
+    from_status        ENUM ('WAITING', 'IN_PROGRESS', 'WAITING_RESULTS', 'RESULTS_READY', 'WAITING_PAYMENT', 'COMPLETED',
+                             'CANCELLED') NULL DEFAULT NULL,
+    to_status          ENUM ('WAITING', 'IN_PROGRESS', 'WAITING_RESULTS', 'RESULTS_READY', 'WAITING_PAYMENT', 'COMPLETED',
+                             'CANCELLED') NOT NULL,
+    changed_by_user_id BIGINT    NOT NULL,
+    notes              TEXT      NULL,
+    created_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_pvsh_visit (visit_id),
+    CONSTRAINT fk_pvsh_visit FOREIGN KEY (visit_id) REFERENCES pet_visits (id) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;

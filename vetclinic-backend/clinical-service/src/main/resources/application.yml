@@ -27,6 +27,19 @@ spring:
           batch_size: 50
         order_inserts: true
         order_updates: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:vetclinic}
+    password: ${RABBITMQ_PASSWORD:vetclinic_dev}
+    listener:
+      simple:
+        default-requeue-rejected: false   # Hết retry -> đẩy sang DLQ, không requeue vô hạn
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000ms
+          multiplier: 2
   cloud:
     openfeign:
       client:
@@ -34,7 +47,7 @@ spring:
           default:
             connect-timeout: 3000
             read-timeout: 5000
-  # Phần 2 (đợt khám) thêm: spring.rabbitmq (sự kiện), spring.servlet.multipart (ảnh CĐHA 20MB), vetclinic.storage
+  # NV3 (cận lâm sàng) thêm: spring.servlet.multipart (ảnh CĐHA 20MB), vetclinic.storage
 
 eureka:
   client:
@@ -56,4 +69,4 @@ management:
 
 vetclinic:
   clinic:
-    zone: Asia/Ho_Chi_Minh              # Múi giờ vận hành phòng khám (năm trong mã PET-yyyy-NNNNN)
+    zone: Asia/Ho_Chi_Minh              # Múi giờ vận hành phòng khám ("hôm nay" khi check-in, năm trong mã PET-/VIS-)

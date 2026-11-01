@@ -2,8 +2,10 @@ package com.vetclinic.clinical.testsupport;
 
 import com.vetclinic.clinical.constant.PetGender;
 import com.vetclinic.clinical.constant.ServiceCategory;
+import com.vetclinic.clinical.constant.VisitStatus;
 import com.vetclinic.clinical.entity.ClinicService;
 import com.vetclinic.clinical.entity.Pet;
+import com.vetclinic.clinical.entity.PetVisit;
 import com.vetclinic.clinical.entity.Species;
 import com.vetclinic.common.exception.AppException;
 import com.vetclinic.common.exception.ErrorCode;
@@ -30,6 +32,7 @@ public final class TestData {
     public static final long OTHER_OWNER = 6L;
     public static final long RECEPTIONIST = 9L;
     public static final long DOCTOR = 21L;
+    public static final long OTHER_DOCTOR = 22L;
 
     private TestData() {
     }
@@ -45,6 +48,12 @@ public final class TestData {
     public static Pet pet(long id, Species species) {
         return Pet.builder().id(id).ownerId(OWNER).species(species).petCode("PET-2026-" + id).name("Lu")
                 .gender(PetGender.MALE).build();
+    }
+
+    public static PetVisit visit(long id, VisitStatus status, Long doctorId) {
+        return PetVisit.builder().id(id).visitCode("VIS-2026-" + id).pet(pet(11L, dog())).doctorId(doctorId)
+                .assignedRoom(doctorId == null ? null : "P01").receptionistId(RECEPTIONIST).status(status)
+                .checkedInAt(Instant.parse("2026-10-30T01:00:00Z")).build();
     }
 
     public static ClinicService service(long id, String code, ServiceCategory category, String price) {
