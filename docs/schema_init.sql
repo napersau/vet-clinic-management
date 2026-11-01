@@ -3,8 +3,9 @@
 -- Chỉ chạy khi volume MySQL còn trống (mount vào /docker-entrypoint-initdb.d/). Sửa file này thì phải `docker compose down -v`.
 -- Script không idempotent (MySQL 8 không có CREATE INDEX IF NOT EXISTS).
 --
--- Hiện có: pet_clinic_auth_db (auth-service), pet_clinic_appointment_db (appointment-service).
--- Database của các service khác được thêm vào CUỐI file khi chuyển service đó.
+-- Hiện có: pet_clinic_auth_db (auth-service), pet_clinic_appointment_db (appointment-service),
+-- pet_clinic_clinical_db (clinical-service, phần 1: loài, thú cưng, danh mục dịch vụ / xét nghiệm).
+-- Database / bảng của các phần khác được thêm vào CUỐI file khi chuyển phần đó.
 -- Bảng tạo SAU CÙNG phải trùng với bảng mà healthcheck của mysql-server trong docker-compose.yml kiểm tra.
 -- =====================================================================================================================
 
@@ -120,4 +121,120 @@ CREATE TABLE appointment_status_histories (
     PRIMARY KEY (id),
     KEY idx_ash_appointment (appointment_id),
     CONSTRAINT fk_ash_appointment FOREIGN KEY (appointment_id) REFERENCES appointments (id) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- PHẦN 3. pet_clinic_clinical_db (clinical-service) - phần 1: species, services, lab_test_items,
+-- lab_test_reference_ranges, service_lab_test_items, pets.
+-- 7 bảng của đợt khám (pet_visits, *_histories, visit_service_details, lab_test_results, imaging_*) thêm ở phần 2.
+-- Seed dưới đây là DANH MỤC GỐC (loài id 1-2, dịch vụ id 1-7, chỉ số id 1-4): thứ tự INSERT quyết định id và các dòng sau
+-- tham chiếu cứng theo id đó. Không đổi thứ tự. Mã EXAM_GEN bắt buộc phải có (bác sĩ bắt đầu khám tự thêm phí này).
+-- ---------------------------------------------------------------------------------------------------------------------
+CREATE DATABASE pet_clinic_clinical_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE pet_clinic_clinical_db;
+
+CREATE TABLE species (
+    id          BIGINT       NOT NULL AUTO_INCREMENT,
+    code        VARCHAR(50)  NOT NULL,
+    name        VARCHAR(100) NOT NULL,
+    description VARCHAR(255) NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY code (code)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+INSERT INTO species (code, name, description) VALUES
+    ('DOG', 'Chó', 'Loài chó (Canis lupus familiaris)'),
+    ('CAT', 'Mèo', 'Loài mèo (Felis catus)');
+
+CREATE TABLE services (
+    id          BIGINT        NOT NULL AUTO_INCREMENT,
+    code        VARCHAR(50)   NOT NULL,
+    name        VARCHAR(150)  NOT NULL,
+    category    ENUM ('EXAMINATION', 'VACCINATION', 'DEWORMING', 'EXTERNAL_PARASITE', 'INJECTION_INFUSION', 'LABORATORY',
+                      'IMAGING', 'SURGERY', 'PROCEDURE') NOT NULL,
+    price       DECIMAL(12, 2) NOT NULL,
+    description TEXT          NULL,
+    is_active   TINYINT(1)    NOT NULL DEFAULT 1,
+    PRIMARY KEY (id),
+    UNIQUE KEY code (code)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+INSERT INTO services (code, name, category, price, description) VALUES
+    ('EXAM_GEN', 'Khám lâm sàng tổng quát', 'EXAMINATION', 100000.00, 'Khám tổng thể, kiểm tra thân nhiệt, cân nặng và triệu chứng bệnh'),
+    ('VAC_7B', 'Tiêm phòng Vaccine 7 bệnh (Chó)', 'VACCINATION', 150000.00, 'Công tiêm phòng vaccine phòng 7 bệnh truyền nhiễm'),
+    ('VAC_4B', 'Tiêm phòng Vaccine 4 bệnh (Mèo)', 'VACCINATION', 150000.00, 'Công tiêm phòng vaccine cho mèo'),
+    ('DEWORM', 'Dịch vụ tẩy giun đường ruột', 'DEWORMING', 50000.00, 'Công kiểm tra và hỗ trợ cho uống thuốc tẩy giun'),
+    ('LAB_CBC', 'Xét nghiệm tổng phân tích tế bào máu (CBC)', 'LABORATORY', 250000.00, 'Xét nghiệm 18-24 chỉ số tế bào máu tự động'),
+    ('IMG_US_AB', 'Siêu âm ổ bụng tổng quát', 'IMAGING', 200000.00, 'Siêu âm màu kiểm tra các cơ quan nội tạng ổ bụng'),
+    ('IMG_XRAY', 'Chụp X-quang kỹ thuật số (1 tư thế)', 'IMAGING', 180000.00, 'Chụp X-quang tim phổi / xương khớp');
+
+CREATE TABLE lab_test_items (
+    id          BIGINT       NOT NULL AUTO_INCREMENT,
+    code        VARCHAR(50)  NOT NULL,
+    name        VARCHAR(100) NOT NULL,
+    unit        VARCHAR(30)  NOT NULL,
+    description VARCHAR(255) NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY code (code)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+INSERT INTO lab_test_items (code, name, unit, description) VALUES
+    ('WBC', 'Bạch cầu (White Blood Cells)', '10^9/L', 'Số lượng bạch cầu tổng số'),
+    ('RBC', 'Hồng cầu (Red Blood Cells)', '10^12/L', 'Số lượng hồng cầu tổng số'),
+    ('HGB', 'Huyết sắc tố (Hemoglobin)', 'g/dL', 'Nồng độ huyết sắc tố'),
+    ('PLT', 'Tiểu cầu (Platelets)', '10^9/L', 'Số lượng tiểu cầu');
+
+-- Khoảng tham chiếu theo loài; kết quả xét nghiệm chụp lại (snapshot) khoảng tại thời điểm nhập nên sửa khoảng không đổi kết quả cũ
+CREATE TABLE lab_test_reference_ranges (
+    id               BIGINT       NOT NULL AUTO_INCREMENT,
+    lab_test_item_id BIGINT       NOT NULL,
+    species_id       BIGINT       NOT NULL,
+    min_value        DECIMAL(8, 2) NOT NULL,
+    max_value        DECIMAL(8, 2) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_ltrr_item_species (lab_test_item_id, species_id),
+    KEY idx_ltrr_species (species_id),
+    CONSTRAINT fk_ltrr_item FOREIGN KEY (lab_test_item_id) REFERENCES lab_test_items (id),
+    CONSTRAINT fk_ltrr_species FOREIGN KEY (species_id) REFERENCES species (id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+INSERT INTO lab_test_reference_ranges (lab_test_item_id, species_id, min_value, max_value) VALUES
+    (1, 1, 6.00, 17.00), (2, 1, 5.50, 8.50), (3, 1, 12.00, 18.00), (4, 1, 200.00, 500.00),   -- chó
+    (1, 2, 5.50, 19.50), (2, 2, 5.00, 10.00), (3, 2, 8.00, 15.00), (4, 2, 300.00, 700.00);   -- mèo
+
+-- Dịch vụ xét nghiệm gồm những chỉ số nào. Dịch vụ LABORATORY chưa có dòng nào = gồm mọi chỉ số (tương thích ngược)
+CREATE TABLE service_lab_test_items (
+    service_id       BIGINT NOT NULL,
+    lab_test_item_id BIGINT NOT NULL,
+    PRIMARY KEY (service_id, lab_test_item_id),
+    KEY fk_slti_item (lab_test_item_id),
+    CONSTRAINT fk_slti_item FOREIGN KEY (lab_test_item_id) REFERENCES lab_test_items (id),
+    CONSTRAINT fk_slti_service FOREIGN KEY (service_id) REFERENCES services (id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+INSERT INTO service_lab_test_items (service_id, lab_test_item_id) VALUES (5, 1), (5, 2), (5, 3), (5, 4);   -- LAB_CBC
+
+-- owner_id tham chiếu sang pet_clinic_auth_db.users nên không có khóa ngoại vật lý
+CREATE TABLE pets (
+    id                          BIGINT       NOT NULL AUTO_INCREMENT,
+    owner_id                    BIGINT       NOT NULL,
+    species_id                  BIGINT       NOT NULL,
+    pet_code                    VARCHAR(50)  NOT NULL,
+    name                        VARCHAR(100) NOT NULL,
+    breed                       VARCHAR(100) NULL,
+    gender                      ENUM ('MALE', 'FEMALE', 'UNKNOWN') NOT NULL DEFAULT 'UNKNOWN',
+    date_of_birth               DATE         NULL,
+    color                       VARCHAR(100) NULL,
+    weight                      DECIMAL(5, 2) NULL,
+    is_neutered                 TINYINT(1)   NOT NULL DEFAULT 0,
+    identifying_characteristics TEXT         NULL,
+    notes                       TEXT         NULL,
+    created_at                  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at                  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY pet_code (pet_code),
+    KEY idx_pets_owner (owner_id),
+    KEY idx_pets_code (pet_code),
+    KEY idx_pets_species (species_id),
+    CONSTRAINT fk_pets_species FOREIGN KEY (species_id) REFERENCES species (id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;

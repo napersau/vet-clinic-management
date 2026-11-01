@@ -1,0 +1,59 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: clinical-service
+  autoconfigure:
+    # Xác thực do Gateway đảm nhận; tắt user/password mặc định mà Boot tự sinh
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  datasource:
+    # Instant lưu UTC; TIMESTAMP của MySQL quy đổi theo session time zone nên ép session = UTC
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/pet_clinic_clinical_db?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:vetclinic_dev}
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 10000
+  jpa:
+    open-in-view: false        # Giải phóng connection ngay sau khi Service kết thúc
+    hibernate:
+      ddl-auto: validate       # Schema chỉ thay đổi qua docs/schema_init.sql
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: 3000
+            read-timeout: 5000
+  # Phần 2 (đợt khám) thêm: spring.rabbitmq (sự kiện), spring.servlet.multipart (ảnh CĐHA 20MB), vetclinic.storage
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+    registry-fetch-interval-seconds: 5
+  instance:
+    prefer-ip-address: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+vetclinic:
+  clinic:
+    zone: Asia/Ho_Chi_Minh              # Múi giờ vận hành phòng khám (năm trong mã PET-yyyy-NNNNN)

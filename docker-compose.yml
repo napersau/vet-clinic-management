@@ -62,7 +62,7 @@ services:
       # Ping qua TCP (127.0.0.1) và kiểm tra bảng cuối cùng của script: trong lúc init, MySQL chỉ mở socket,
       # nên `mysqladmin ping` sẽ báo healthy quá sớm khi schema chưa tạo xong.
       # Thêm database mới vào cuối schema_init.sql thì đổi bảng ở đây thành bảng tạo sau cùng.
-      test: ["CMD-SHELL", "mysql -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD -e 'SELECT 1 FROM pet_clinic_appointment_db.appointment_status_histories LIMIT 1' >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "mysql -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD -e 'SELECT 1 FROM pet_clinic_clinical_db.pets LIMIT 1' >/dev/null 2>&1"]
       <<: *healthcheck-timing
     networks: [vetclinic-net]
 
@@ -112,14 +112,16 @@ services:
       - "8080:8080"
     # Gateway khởi động SAU các service nghiệp vụ để lần lấy danh sách Eureka đầu tiên đã có đủ service:
     # "api-gateway healthy" nghĩa là cả hệ thống sẵn sàng nhận request.
-    # Đã chuyển xong auth-service, appointment-service; thêm clinical / billing-pharmacy / notification vào đây khi chuyển
-    # xong từng service (hiện chúng chỉ là khung Spring Initializr, chưa khởi động được).
+    # Đã chuyển xong auth-service, appointment-service, clinical-service (phần 1); thêm billing-pharmacy / notification vào
+    # đây khi chuyển xong từng service (hiện chúng chỉ là khung Spring Initializr, chưa khởi động được).
     depends_on:
       service-registry:
         condition: service_healthy
       auth-service:
         condition: service_healthy
       appointment-service:
+        condition: service_healthy
+      clinical-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
@@ -149,9 +151,9 @@ services:
     image: vetclinic/appointment-service:latest
     environment:
       <<: *spring-env
-      # TẠM để false: clinical-service (nơi giữ hồ sơ thú cưng) chưa chuyển xong, bật true sẽ không đặt được lịch nào.
-      # Đổi lại mặc định :-true khi chuyển xong clinical-service (cung cấp GET /internal/clinical/pets/{id}).
-      BOOKING_VERIFY_PET: ${BOOKING_VERIFY_PET:-false}
+      # Kiểm tra thú cưng tồn tại và đúng chủ qua clinical-service (GET /internal/clinical/pets/{id}).
+      # Chỉ đặt false khi chạy appointment-service riêng, không có clinical-service.
+      BOOKING_VERIFY_PET: ${BOOKING_VERIFY_PET:-true}
       BOOKING_NO_SHOW_CRON: ${BOOKING_NO_SHOW_CRON:-0 */15 7-21 * * *}
       BOOKING_PENDING_EXPIRY_CRON: ${BOOKING_PENDING_EXPIRY_CRON:-0 5,20,35,50 7-21 * * *}
     depends_on: *depends-on-infra
@@ -171,8 +173,9 @@ services:
       IMAGING_DIR: /app/uploads/imaging
     volumes:
       - imaging-data:/app/uploads/imaging
-      # Ảnh CĐHA mẫu cho dữ liệu demo trong schema_init.sql (file_url = seed/...); chỉ đọc
-      - ./docs/demo-images:/app/uploads/imaging/seed:ro
+      # Ảnh CĐHA mẫu cho dữ liệu demo (file_url = seed/...), chỉ đọc. Bật lại khi có docs/demo-images và dữ liệu demo:
+      # thư mục nguồn chưa có thì Docker tự tạo một thư mục rỗng trong repo.
+      # - ./docs/demo-images:/app/uploads/imaging/seed:ro
     depends_on: *depends-on-infra
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8083/actuator/health"]
