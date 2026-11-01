@@ -2,10 +2,12 @@ package com.vetclinic.clinical.testsupport;
 
 import com.vetclinic.clinical.constant.PetGender;
 import com.vetclinic.clinical.constant.ServiceCategory;
+import com.vetclinic.clinical.constant.ServiceDetailStatus;
 import com.vetclinic.clinical.constant.VisitStatus;
 import com.vetclinic.clinical.entity.ClinicService;
 import com.vetclinic.clinical.entity.Pet;
 import com.vetclinic.clinical.entity.PetVisit;
+import com.vetclinic.clinical.entity.VisitServiceDetail;
 import com.vetclinic.clinical.entity.Species;
 import com.vetclinic.common.exception.AppException;
 import com.vetclinic.common.exception.ErrorCode;
@@ -59,6 +61,12 @@ public final class TestData {
     public static ClinicService service(long id, String code, ServiceCategory category, String price) {
         return ClinicService.builder().id(id).code(code).name("Dịch vụ " + code).category(category)
                 .price(new BigDecimal(price)).active(true).build();
+    }
+
+    public static VisitServiceDetail detail(long id, long visitId, ClinicService service, ServiceDetailStatus status) {
+        return VisitServiceDetail.builder().id(id).visitId(visitId).service(service).unitPrice(service.getPrice())
+                .quantity(1).subtotal(service.getPrice()).status(status)
+                .createdAt(Instant.parse("2026-10-30T01:30:00Z").plusSeconds(id)).build();
     }
 
     public static void loginAs(long userId, RoleCode role) {

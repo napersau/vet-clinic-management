@@ -3,19 +3,29 @@ package com.vetclinic.clinical.service.impl;
 import com.vetclinic.clinical.client.AppointmentClient;
 import com.vetclinic.clinical.client.AuthClient;
 import com.vetclinic.clinical.constant.DoctorStatus;
+import com.vetclinic.clinical.constant.ServiceCategory;
+import com.vetclinic.clinical.constant.ServiceDetailStatus;
 import com.vetclinic.clinical.constant.VisitStatus;
 import com.vetclinic.clinical.dto.request.AssignDoctorRequest;
 import com.vetclinic.clinical.dto.request.CheckInRequest;
+import com.vetclinic.clinical.dto.request.CloseVisitRequest;
+import com.vetclinic.clinical.dto.request.OrderServicesRequest;
 import com.vetclinic.clinical.dto.request.ReasonRequest;
+import com.vetclinic.clinical.dto.request.ServiceOrderItem;
+import com.vetclinic.clinical.dto.request.StartExamRequest;
 import com.vetclinic.clinical.dto.response.AppointmentSummaryResponse;
 import com.vetclinic.clinical.dto.response.UserSummaryResponse;
 import com.vetclinic.clinical.dto.response.VisitHistoryResponse;
 import com.vetclinic.clinical.dto.response.VisitResponse;
+import com.vetclinic.clinical.entity.ClinicService;
 import com.vetclinic.clinical.entity.Pet;
 import com.vetclinic.clinical.entity.PetVisit;
+import com.vetclinic.clinical.entity.VisitServiceDetail;
+import com.vetclinic.clinical.repository.ClinicServiceRepository;
 import com.vetclinic.clinical.repository.PetRepository;
 import com.vetclinic.clinical.repository.PetVisitRepository;
 import com.vetclinic.clinical.repository.PetVisitStatusHistoryRepository;
+import com.vetclinic.clinical.repository.VisitServiceDetailRepository;
 import com.vetclinic.clinical.service.DoctorStatusService;
 import com.vetclinic.clinical.service.QueueSchedule;
 import com.vetclinic.clinical.service.VisitAssembler;
@@ -24,6 +34,7 @@ import com.vetclinic.clinical.service.VisitSupport;
 import com.vetclinic.common.dto.ApiResponse;
 import com.vetclinic.common.dto.PageResponse;
 import com.vetclinic.common.event.VisitCheckedInEvent;
+import com.vetclinic.common.event.VisitClosedToPaymentEvent;
 import com.vetclinic.common.exception.AppException;
 import com.vetclinic.common.exception.ErrorCode;
 import com.vetclinic.common.lock.NamedLockService;
@@ -41,6 +52,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -48,15 +60,23 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class VisitServiceImpl implements VisitService {
 
+    /** Phí khám lâm sàng tổng quát, tự thêm vào đợt khám khi Bác sĩ bắt đầu khám (CLAUDE.md §5.8). */
+    static final String EXAM_SERVICE_CODE = "EXAM_GEN";
+
     private final PetVisitRepository visitRepository;
     private final PetRepository petRepository;
     private final PetVisitStatusHistoryRepository historyRepository;
+    private final VisitServiceDetailRepository detailRepository;
+    private final ClinicServiceRepository serviceRepository;
     private final AuthClient authClient;
     private final AppointmentClient appointmentClient;
     private final DoctorStatusService doctorStatusService;
@@ -68,14 +88,17 @@ public class VisitServiceImpl implements VisitService {
     private final TransactionTemplate transactionTemplate;
 
     public VisitServiceImpl(PetVisitRepository visitRepository, PetRepository petRepository,
-                            PetVisitStatusHistoryRepository historyRepository, AuthClient authClient,
-                            AppointmentClient appointmentClient, DoctorStatusService doctorStatusService,
-                            VisitSupport support, VisitAssembler assembler, NamedLockService lockService,
-                            ApplicationEventPublisher eventPublisher, Clock clock,
+                            PetVisitStatusHistoryRepository historyRepository,
+                            VisitServiceDetailRepository detailRepository, ClinicServiceRepository serviceRepository,
+                            AuthClient authClient, AppointmentClient appointmentClient,
+                            DoctorStatusService doctorStatusService, VisitSupport support, VisitAssembler assembler,
+                            NamedLockService lockService, ApplicationEventPublisher eventPublisher, Clock clock,
                             PlatformTransactionManager transactionManager) {
         this.visitRepository = visitRepository;
         this.petRepository = petRepository;
         this.historyRepository = historyRepository;
+        this.detailRepository = detailRepository;
+        this.serviceRepository = serviceRepository;
         this.authClient = authClient;
         this.appointmentClient = appointmentClient;
         this.doctorStatusService = doctorStatusService;
@@ -272,6 +295,171 @@ public class VisitServiceImpl implements VisitService {
         return assembler.summary(visit);
     }
 
+    // ================================================================== khám giai đoạn 1 (UC-22, UC-23)
+
+    @Override
+    @Transactional
+    public VisitResponse startExam(Long id, StartExamRequest request) {
+        Long doctorId = SecurityUtils.getCurrentUserId();
+        PetVisit visit = support.lock(id);
+        support.assertAssignedTo(visit, doctorId);
+        support.assertStatus(visit, VisitStatus.WAITING,
+                "Chỉ có thể bắt đầu khám đối với ca đang ở trạng thái Chờ khám (WAITING)");
+        // BR-12: một Bác sĩ chỉ khám một ca tại một thời điểm
+        if (visitRepository.existsByDoctorIdAndStatus(doctorId, VisitStatus.IN_PROGRESS)) {
+            throw new AppException(ErrorCode.DOCTOR_NOT_AVAILABLE, "Bác sĩ đang có một ca khám khác chưa kết thúc!");
+        }
+
+        visit.setWeightAtVisit(request.weightAtVisit());
+        visit.setTemperature(request.temperature());
+        visit.setClinicalNotes(blankToNull(request.clinicalNotes()));
+        visit.setStartedAt(clock.instant());
+        support.transition(visit, VisitStatus.IN_PROGRESS, doctorId,
+                "Bác sĩ bắt đầu khám lâm sàng Giai đoạn 1 tại phòng " + visit.getAssignedRoom());
+
+        serviceRepository.findByCode(EXAM_SERVICE_CODE)
+                .filter(ClinicService::isActive)
+                .filter(s -> !detailRepository.existsByVisitAndServiceCode(visit.getId(), s.getCode()))
+                .ifPresent(s -> createDetail(visit.getId(), s, 1, "Phí khám lâm sàng tổng quát (tự động)", doctorId));
+        return assembler.detail(visit);
+    }
+
+    @Override
+    @Transactional
+    public VisitResponse orderServices(Long id, OrderServicesRequest request) {
+        Long doctorId = SecurityUtils.getCurrentUserId();
+        List<Long> serviceIds = request.services().stream().map(ServiceOrderItem::serviceId).distinct().toList();
+        Map<Long, ClinicService> found = serviceRepository.findByIdInAndActiveTrue(serviceIds).stream()
+                .collect(Collectors.toMap(ClinicService::getId, Function.identity()));
+        if (found.size() != serviceIds.size()) {
+            throw new AppException(ErrorCode.SERVICE_NOT_FOUND);
+        }
+
+        PetVisit visit = support.lock(id);
+        support.assertAssignedTo(visit, doctorId);
+        support.assertStatus(visit, VisitStatus.IN_PROGRESS, "Chỉ chỉ định dịch vụ khi ca khám đang diễn ra (IN_PROGRESS)");
+
+        boolean hasParaclinical = false;
+        for (ServiceOrderItem item : request.services()) {
+            ClinicService service = found.get(item.serviceId());
+            createDetail(visit.getId(), service, item.quantity() == null ? 1 : item.quantity(), blankToNull(item.notes()), doctorId);
+            hasParaclinical |= service.getCategory().isParaclinical();
+        }
+        // FR-33: có chỉ định Lab / CĐHA thì giải phóng Bác sĩ (ca rời IN_PROGRESS nên trạng thái Bác sĩ tính ra AVAILABLE)
+        if (hasParaclinical) {
+            support.transition(visit, VisitStatus.WAITING_RESULTS, doctorId,
+                    "Bác sĩ chỉ định cận lâm sàng, ca chuyển sang chờ kết quả và Bác sĩ được giải phóng");
+        }
+        return assembler.detail(visit);
+    }
+
+    /** Snapshot đơn giá (BR-25). Lab / CĐHA chờ ở hàng đợi (PENDING); dịch vụ làm tại phòng khám thì hoàn tất ngay. */
+    private VisitServiceDetail createDetail(Long visitId, ClinicService service, int quantity, String notes, Long actorId) {
+        boolean paraclinical = service.getCategory().isParaclinical();
+        ServiceDetailStatus status = paraclinical ? ServiceDetailStatus.PENDING : ServiceDetailStatus.COMPLETED;
+        VisitServiceDetail detail = detailRepository.saveAndFlush(VisitServiceDetail.builder()
+                .visitId(visitId)
+                .service(service)
+                .unitPrice(service.getPrice())
+                .quantity(quantity)
+                .subtotal(service.getPrice().multiply(BigDecimal.valueOf(quantity)))
+                .status(status)
+                .notes(notes)
+                .build());
+        support.recordDetail(detail.getId(), null, status, paraclinical ? "ORDERED" : "COMPLETED", actorId,
+                paraclinical ? notes : "Thực hiện tại phòng khám");
+        return detail;
+    }
+
+    // ================================================================== khám giai đoạn 2 (UC-30, UC-33)
+
+    @Override
+    @Transactional
+    public VisitResponse callBack(Long id) {
+        Long doctorId = SecurityUtils.getCurrentUserId();
+        PetVisit visit = support.lock(id);
+        support.assertAssignedTo(visit, doctorId);
+        support.assertStatus(visit, VisitStatus.RESULTS_READY, "Chỉ gọi vào phòng được ca đã có kết quả (RESULTS_READY)");
+        if (visitRepository.existsByDoctorIdAndStatus(doctorId, VisitStatus.IN_PROGRESS)) {
+            throw new AppException(ErrorCode.DOCTOR_NOT_AVAILABLE, "Bác sĩ đang có một ca khám khác chưa kết thúc!");
+        }
+        visit.setCallbackPostponedAt(null);
+        support.transition(visit, VisitStatus.IN_PROGRESS, doctorId, "Bác sĩ mời vào phòng, bắt đầu Giai đoạn 2");
+        return assembler.detail(visit);
+    }
+
+    @Override
+    @Transactional
+    public VisitResponse postponeCallback(Long id) {
+        Long doctorId = SecurityUtils.getCurrentUserId();
+        PetVisit visit = support.lock(id);
+        support.assertAssignedTo(visit, doctorId);
+        support.assertStatus(visit, VisitStatus.RESULTS_READY, "Chỉ tạm hoãn được ca đã có kết quả (RESULTS_READY)");
+        if (visit.getCallbackPostponedAt() != null) {
+            throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION, "Ca này đã được tạm hoãn trước đó");
+        }
+        visit.setCallbackPostponedAt(clock.instant());
+        visitRepository.save(visit);
+        support.record(visit.getId(), VisitStatus.RESULTS_READY, VisitStatus.RESULTS_READY, doctorId,
+                "Tạm hoãn gọi tái khám do khách vắng mặt (EX-10), giải phóng Khóa ưu tiên của Bác sĩ");
+        return assembler.summary(visit);
+    }
+
+    @Override
+    @Transactional
+    public VisitResponse closeVisit(Long id, CloseVisitRequest request) {
+        Long doctorId = SecurityUtils.getCurrentUserId();
+        String diagnosis = blankToNull(request.diagnosis());
+        // EX-12: chặn chốt ca khi chưa có chẩn đoán xác định
+        if (diagnosis == null) {
+            throw new AppException(ErrorCode.DIAGNOSIS_REQUIRED);
+        }
+
+        PetVisit visit = support.lock(id);
+        support.assertAssignedTo(visit, doctorId);
+        support.assertStatus(visit, VisitStatus.IN_PROGRESS, "Chỉ chốt được ca đang khám (IN_PROGRESS)");
+        if (detailRepository.countByVisitAndCategoriesAndStatuses(visit.getId(), ServiceCategory.PARACLINICAL,
+                ServiceDetailStatus.OPEN) > 0) {
+            throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION, "Còn dịch vụ cận lâm sàng chưa hoàn tất");
+        }
+
+        visit.setDiagnosis(diagnosis);
+        visit.setTreatmentPlan(blankToNull(request.treatmentPlan()));
+        visit.setDoctorAdvice(blankToNull(request.doctorAdvice()));
+        if (request.clinicalNotes() != null) {
+            visit.setClinicalNotes(blankToNull(request.clinicalNotes()));
+        }
+        visit.setClosedAt(clock.instant());
+        // Khóa hồ sơ chuyên môn một chiều (BR-27): từ đây VisitResponse.locked = true
+        support.transition(visit, VisitStatus.WAITING_PAYMENT, doctorId,
+                "Bác sĩ chốt chuyên môn, khóa hồ sơ bệnh án và chuyển sang thanh toán");
+        publishClosed(visit, doctorId, false);
+        return assembler.detail(visit);
+    }
+
+    @Override
+    @Transactional
+    public VisitResponse abandon(Long id) {
+        Actor actor = currentActor();
+        PetVisit visit = support.lock(id);
+        if (actor.role() == RoleCode.VETERINARIAN) {
+            support.assertAssignedTo(visit, actor.id());
+        } else if (actor.role() != RoleCode.RECEPTIONIST) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
+        support.assertStatus(visit, VisitStatus.RESULTS_READY,
+                "Chỉ đóng ca \"khách bỏ về\" được với ca đã có kết quả (RESULTS_READY)");
+
+        Instant now = clock.instant();
+        visit.setClosedAt(now);
+        visit.setCompletedAt(now);
+        visit.setCallbackPostponedAt(null);
+        support.transition(visit, VisitStatus.COMPLETED, actor.id(),
+                "Khách bỏ về không đọc kết quả: đóng ca, lưu kết quả vào bệnh án và ghi nợ viện phí (EX-11)");
+        publishClosed(visit, actor.id(), true);
+        return assembler.detail(visit);
+    }
+
     // ================================================================== hủy đợt khám
 
     @Override
@@ -297,15 +485,38 @@ public class VisitServiceImpl implements VisitService {
                     "Không thể hủy đợt khám đang ở trạng thái " + visit.getStatus());
         }
 
-        // NV2 bổ sung tại đây: hủy theo các chỉ định cận lâm sàng còn dở để không bao giờ bị tính tiền (EX-08)
         String reason = request.reason().trim();
+        // EX-08: dịch vụ cận lâm sàng còn dở dang bị hủy theo và không bao giờ tính tiền
+        for (VisitServiceDetail detail : detailRepository.findByVisitIdOrderByIdAsc(visit.getId())) {
+            if (ServiceDetailStatus.OPEN.contains(detail.getStatus())) {
+                ServiceDetailStatus from = detail.getStatus();
+                detail.setStatus(ServiceDetailStatus.CANCELLED);
+                detailRepository.save(detail);
+                support.recordDetail(detail.getId(), from, ServiceDetailStatus.CANCELLED, "CANCELLED", actor.id(),
+                        "Hủy đợt khám: " + reason);
+            }
+        }
         visit.setCancelReason(reason);
         visit.setClosedAt(clock.instant());
         support.transition(visit, VisitStatus.CANCELLED, actor.id(), "Hủy đợt khám: " + reason);
         return assembler.detail(visit);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<VisitResponse> myVisits() {
+        return assembler.summaries(visitRepository.findByDoctorIdAndStatusInOrderByCheckedInAtAscIdAsc(
+                SecurityUtils.getCurrentUserId(),
+                List.of(VisitStatus.WAITING, VisitStatus.IN_PROGRESS, VisitStatus.RESULTS_READY)));
+    }
+
     // ================================================================== helper
+
+    /** Chỉ được gửi sang RabbitMQ SAU KHI commit (DomainEventRabbitPublisher): billing-pharmacy-service lập hóa đơn PENDING. */
+    private void publishClosed(PetVisit visit, Long actorId, boolean abandoned) {
+        eventPublisher.publishEvent(new VisitClosedToPaymentEvent(UUID.randomUUID(), clock.instant(), actorId,
+                visit.getId(), visit.getVisitCode(), visit.getPet().getId(), visit.getDoctorId(), abandoned));
+    }
 
     private UserSummaryResponse fetchActiveDoctor(Long doctorId) {
         ApiResponse<UserSummaryResponse> response = authClient.getUser(doctorId);

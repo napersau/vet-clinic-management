@@ -1,10 +1,13 @@
 package com.vetclinic.clinical.service;
 
+import com.vetclinic.clinical.constant.ServiceDetailStatus;
 import com.vetclinic.clinical.constant.VisitStatus;
 import com.vetclinic.clinical.entity.PetVisit;
 import com.vetclinic.clinical.entity.PetVisitStatusHistory;
+import com.vetclinic.clinical.entity.VisitServiceDetailHistory;
 import com.vetclinic.clinical.repository.PetVisitRepository;
 import com.vetclinic.clinical.repository.PetVisitStatusHistoryRepository;
+import com.vetclinic.clinical.repository.VisitServiceDetailHistoryRepository;
 import com.vetclinic.common.exception.AppException;
 import com.vetclinic.common.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +16,7 @@ import org.springframework.stereotype.Component;
 /**
  * Các thao tác dùng chung khi đổi trạng thái đợt khám. Luôn gọi bên trong một transaction.
  * Mỗi lần đổi trạng thái đều ghi bảng pet_visit_status_histories trong cùng transaction (quy chuẩn §6).
- * Phần chỉ định dịch vụ (recordDetail) và chuyển RESULTS_READY khi đủ kết quả cận lâm sàng thêm ở NV2 / NV3.
+ * Chuyển RESULTS_READY khi đủ kết quả cận lâm sàng (evaluateParaclinicalCompletion) thêm ở NV3.
  */
 @Component
 @RequiredArgsConstructor
@@ -21,6 +24,7 @@ public class VisitSupport {
 
     private final PetVisitRepository visitRepository;
     private final PetVisitStatusHistoryRepository historyRepository;
+    private final VisitServiceDetailHistoryRepository detailHistoryRepository;
 
     /** Khóa dòng đợt khám (SELECT ... FOR UPDATE). Bắt buộc dùng trước mọi thao tác ghi. */
     public PetVisit lock(Long visitId) {
@@ -59,6 +63,19 @@ public class VisitSupport {
                 .toStatus(to)
                 .changedByUserId(actorId)
                 .notes(note)
+                .build());
+    }
+
+    /** Audit trail tiến độ một chỉ định. action: ORDERED, START_PROCESSING, COMPLETED, CANCELLED, POSTPONED, RECALL. */
+    public void recordDetail(Long detailId, ServiceDetailStatus from, ServiceDetailStatus to, String action,
+                             Long actorId, String reason) {
+        detailHistoryRepository.save(VisitServiceDetailHistory.builder()
+                .visitServiceDetailId(detailId)
+                .fromStatus(from)
+                .toStatus(to)
+                .action(action)
+                .changedByUserId(actorId)
+                .reason(reason)
                 .build());
     }
 }

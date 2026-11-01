@@ -62,7 +62,7 @@ services:
       # Ping qua TCP (127.0.0.1) và kiểm tra bảng cuối cùng của script: trong lúc init, MySQL chỉ mở socket,
       # nên `mysqladmin ping` sẽ báo healthy quá sớm khi schema chưa tạo xong.
       # Thêm database mới vào cuối schema_init.sql thì đổi bảng ở đây thành bảng tạo sau cùng.
-      test: ["CMD-SHELL", "mysql -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD -e 'SELECT 1 FROM pet_clinic_clinical_db.pet_visit_status_histories LIMIT 1' >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "mysql -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD -e 'SELECT 1 FROM pet_clinic_clinical_db.visit_service_detail_histories LIMIT 1' >/dev/null 2>&1"]
       <<: *healthcheck-timing
     networks: [vetclinic-net]
 

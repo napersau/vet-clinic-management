@@ -39,6 +39,9 @@ public interface PetVisitRepository extends JpaRepository<PetVisit, Long>, JpaSp
             + "case when v.scheduledAt is null then 1 else 0 end asc, v.scheduledAt asc, v.checkedInAt asc, v.id asc")
     List<PetVisit> findQueueByStatus(@Param("status") VisitStatus status);
 
+    @EntityGraph(attributePaths = {"pet", "pet.species"})
+    List<PetVisit> findByDoctorIdAndStatusInOrderByCheckedInAtAscIdAsc(Long doctorId, Collection<VisitStatus> statuses);
+
     boolean existsByPetIdAndStatusIn(Long petId, Collection<VisitStatus> statuses);
 
     boolean existsByAppointmentId(Long appointmentId);

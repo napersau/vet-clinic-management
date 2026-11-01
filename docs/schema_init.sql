@@ -300,3 +300,44 @@ CREATE TABLE pet_visit_status_histories (
     KEY idx_pvsh_visit (visit_id),
     CONSTRAINT fk_pvsh_visit FOREIGN KEY (visit_id) REFERENCES pet_visits (id) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- PHẦN 3c. pet_clinic_clinical_db - chỉ định dịch vụ (NV2: khám 2 giai đoạn): visit_service_details, visit_service_detail_histories.
+-- Kết quả cận lâm sàng (lab_test_results, imaging_*) của NV3 thêm tiếp ở cuối file.
+-- ---------------------------------------------------------------------------------------------------------------------
+
+-- unit_price là snapshot giá lúc chỉ định (BR-25): Admin đổi giá sau đó không ảnh hưởng ca đã chỉ định.
+-- Lab / CĐHA bắt đầu ở PENDING (vào hàng đợi); dịch vụ làm tại phòng bác sĩ (kể cả phí khám EXAM_GEN) tạo thẳng COMPLETED.
+CREATE TABLE visit_service_details (
+    id         BIGINT        NOT NULL AUTO_INCREMENT,
+    visit_id   BIGINT        NOT NULL,
+    service_id BIGINT        NOT NULL,
+    unit_price DECIMAL(12, 2) NOT NULL,
+    quantity   INT           NOT NULL DEFAULT 1,
+    subtotal   DECIMAL(12, 2) NOT NULL,
+    status     ENUM ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED') NOT NULL DEFAULT 'PENDING',
+    notes      TEXT          NULL,
+    created_at TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY fk_vsd_service (service_id),
+    KEY idx_vsd_visit (visit_id),
+    KEY idx_vsd_status (status),
+    CONSTRAINT fk_vsd_service FOREIGN KEY (service_id) REFERENCES services (id),
+    CONSTRAINT fk_vsd_visit FOREIGN KEY (visit_id) REFERENCES pet_visits (id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- action: ORDERED, START_PROCESSING, COMPLETED, CANCELLED, POSTPONED, RECALL. Hàng đợi Lab / CĐHA suy ra trạng thái con
+-- (hoãn / ưu tiên kế tiếp) từ action mới nhất (CLAUDE.md §5.8).
+CREATE TABLE visit_service_detail_histories (
+    id                      BIGINT      NOT NULL AUTO_INCREMENT,
+    visit_service_detail_id BIGINT      NOT NULL,
+    from_status             ENUM ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED') NULL DEFAULT NULL,
+    to_status               ENUM ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED') NOT NULL,
+    action                  VARCHAR(50) NOT NULL,
+    changed_by_user_id      BIGINT      NOT NULL,
+    reason                  TEXT        NULL,
+    created_at              TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_vsdh_detail (visit_service_detail_id),
+    CONSTRAINT fk_vsdh_vsd FOREIGN KEY (visit_service_detail_id) REFERENCES visit_service_details (id) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;

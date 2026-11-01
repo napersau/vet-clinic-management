@@ -3,7 +3,10 @@ package com.vetclinic.clinical.controller;
 import com.vetclinic.clinical.constant.VisitStatus;
 import com.vetclinic.clinical.dto.request.AssignDoctorRequest;
 import com.vetclinic.clinical.dto.request.CheckInRequest;
+import com.vetclinic.clinical.dto.request.CloseVisitRequest;
+import com.vetclinic.clinical.dto.request.OrderServicesRequest;
 import com.vetclinic.clinical.dto.request.ReasonRequest;
+import com.vetclinic.clinical.dto.request.StartExamRequest;
 import com.vetclinic.clinical.dto.response.VisitHistoryResponse;
 import com.vetclinic.clinical.dto.response.VisitResponse;
 import com.vetclinic.clinical.service.VisitService;
@@ -28,8 +31,7 @@ import java.util.List;
 
 /**
  * Đợt khám ngoại trú hai pha. Chuyển trạng thái dùng POST theo quy chuẩn Action Endpoint.
- * Hiện có tiếp nhận, hàng đợi, phân công, hủy (NV1); start-exam, services, call-back, postpone-callback, close-visit,
- * abandon (NV2) và reopen (NV5) bổ sung sau.
+ * Mở lại ca đã chốt (POST /{id}/reopen, chỉ Admin) thêm ở NV5 vì cần hủy hóa đơn bên billing.
  */
 @RestController
 @RequestMapping("/api/v1/clinical/pet-visits")
@@ -86,6 +88,51 @@ public class VisitController {
     public ResponseEntity<ApiResponse<VisitResponse>> assign(@PathVariable Long id,
                                                              @Valid @RequestBody AssignDoctorRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Phân công bác sĩ thành công", visitService.assignDoctor(id, request)));
+    }
+
+    /** UC-22: Bác sĩ bắt đầu khám, tự đo cân nặng và thân nhiệt. */
+    @PostMapping("/{id}/start-exam")
+    @PreAuthorize("hasRole('VETERINARIAN')")
+    public ResponseEntity<ApiResponse<VisitResponse>> startExam(@PathVariable Long id,
+                                                                @Valid @RequestBody StartExamRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Bác sĩ đã bắt đầu khám lâm sàng", visitService.startExam(id, request)));
+    }
+
+    /** UC-23: chỉ định dịch vụ. Có Lab / CĐHA thì ca sang WAITING_RESULTS và Bác sĩ được giải phóng. */
+    @PostMapping("/{id}/services")
+    @PreAuthorize("hasRole('VETERINARIAN')")
+    public ResponseEntity<ApiResponse<VisitResponse>> orderServices(@PathVariable Long id,
+                                                                    @Valid @RequestBody OrderServicesRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Đã chỉ định dịch vụ", visitService.orderServices(id, request)));
+    }
+
+    /** UC-30: mời ca đã có kết quả vào phòng (GĐ2), cũng là Recall sau khi tạm hoãn. */
+    @PostMapping("/{id}/call-back")
+    @PreAuthorize("hasRole('VETERINARIAN')")
+    public ResponseEntity<ApiResponse<VisitResponse>> callBack(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success("Đã mời bệnh nhân vào phòng", visitService.callBack(id)));
+    }
+
+    /** EX-10: khách vắng khi gọi vào GĐ2. */
+    @PostMapping("/{id}/postpone-callback")
+    @PreAuthorize("hasRole('VETERINARIAN')")
+    public ResponseEntity<ApiResponse<VisitResponse>> postponeCallback(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success("Đã tạm hoãn ca tái khám", visitService.postponeCallback(id)));
+    }
+
+    /** UC-33: chốt chuyên môn, khóa hồ sơ, chuyển sang thanh toán. Bắt buộc có chẩn đoán xác định. */
+    @PostMapping("/{id}/close-visit")
+    @PreAuthorize("hasRole('VETERINARIAN')")
+    public ResponseEntity<ApiResponse<VisitResponse>> closeVisit(@PathVariable Long id,
+                                                                 @Valid @RequestBody CloseVisitRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Đã chốt đợt khám, chuyển sang thanh toán", visitService.closeVisit(id, request)));
+    }
+
+    /** EX-11: khách bỏ về hẳn không đọc kết quả. */
+    @PostMapping("/{id}/abandon")
+    @PreAuthorize("hasAnyRole('RECEPTIONIST','VETERINARIAN')")
+    public ResponseEntity<ApiResponse<VisitResponse>> abandon(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success("Đã đóng ca, ghi nợ viện phí", visitService.abandon(id)));
     }
 
     @PostMapping("/{id}/cancel")

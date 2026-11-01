@@ -3,7 +3,10 @@ package com.vetclinic.clinical.service;
 import com.vetclinic.clinical.constant.VisitStatus;
 import com.vetclinic.clinical.dto.request.AssignDoctorRequest;
 import com.vetclinic.clinical.dto.request.CheckInRequest;
+import com.vetclinic.clinical.dto.request.CloseVisitRequest;
+import com.vetclinic.clinical.dto.request.OrderServicesRequest;
 import com.vetclinic.clinical.dto.request.ReasonRequest;
+import com.vetclinic.clinical.dto.request.StartExamRequest;
 import com.vetclinic.clinical.dto.response.VisitHistoryResponse;
 import com.vetclinic.clinical.dto.response.VisitResponse;
 import com.vetclinic.common.dto.PageResponse;
@@ -12,8 +15,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Vòng đời một đợt khám ngoại trú hai pha (SM-01). Hiện có phần tiếp nhận, hàng đợi, phân công và hủy (NV1);
- * khám hai giai đoạn (NV2), cận lâm sàng (NV3), thanh toán / mở lại ca (NV4, NV5) bổ sung sau.
+ * Vòng đời một đợt khám ngoại trú hai pha (SM-01): tiếp nhận, hàng đợi, phân công, hủy (NV1) và khám hai giai đoạn (NV2).
+ * Hoàn tất sau thanh toán / dịch vụ tính tiền (NV4) và mở lại ca (NV5) bổ sung sau.
  */
 public interface VisitService {
 
@@ -34,6 +37,27 @@ public interface VisitService {
     /** UC-21: Lễ tân phân công Bác sĩ (kiểm tra BUSY và Khóa ưu tiên). Ca vẫn WAITING cho tới khi Bác sĩ bấm bắt đầu. */
     VisitResponse assignDoctor(Long id, AssignDoctorRequest request);
 
+    /** UC-22: Bác sĩ bắt đầu khám giai đoạn 1. WAITING -> IN_PROGRESS. */
+    VisitResponse startExam(Long id, StartExamRequest request);
+
+    /** UC-23: chỉ định dịch vụ. Có Lab / CĐHA thì IN_PROGRESS -> WAITING_RESULTS và giải phóng Bác sĩ. */
+    VisitResponse orderServices(Long id, OrderServicesRequest request);
+
+    /** UC-30: mời ca đã có kết quả vào phòng (GĐ2), cũng là Recall sau khi tạm hoãn. RESULTS_READY -> IN_PROGRESS. */
+    VisitResponse callBack(Long id);
+
+    /** EX-10: khách vắng khi gọi vào GĐ2. Giữ RESULTS_READY nhưng giải phóng Khóa ưu tiên của Bác sĩ. */
+    VisitResponse postponeCallback(Long id);
+
+    /** UC-33: chốt chuyên môn, khóa hồ sơ. IN_PROGRESS -> WAITING_PAYMENT, phát sự kiện để billing lập hóa đơn. */
+    VisitResponse closeVisit(Long id, CloseVisitRequest request);
+
+    /** EX-11: khách bỏ về hẳn không đọc kết quả. RESULTS_READY -> COMPLETED, ghi nợ viện phí. */
+    VisitResponse abandon(Long id);
+
     /** EX-03 / FR-26 / FR-34 / FR-45: hủy đợt khám. */
     VisitResponse cancel(Long id, ReasonRequest request);
+
+    /** Danh sách ca của Bác sĩ đang đăng nhập: chờ vào phòng, đang khám, chờ tái khám. */
+    List<VisitResponse> myVisits();
 }
