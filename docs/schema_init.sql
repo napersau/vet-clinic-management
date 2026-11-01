@@ -4,7 +4,7 @@
 -- Script không idempotent (MySQL 8 không có CREATE INDEX IF NOT EXISTS).
 --
 -- Hiện có: pet_clinic_auth_db (auth-service), pet_clinic_appointment_db (appointment-service),
--- pet_clinic_clinical_db (clinical-service, phần 1: loài, thú cưng, danh mục dịch vụ / xét nghiệm).
+-- pet_clinic_clinical_db (clinical-service, đủ 13 bảng), pet_clinic_billing_pharmacy_db (NV4a: kho dược, đơn thuốc).
 -- Database / bảng của các phần khác được thêm vào CUỐI file khi chuyển phần đó.
 -- Bảng tạo SAU CÙNG phải trùng với bảng mà healthcheck của mysql-server trong docker-compose.yml kiểm tra.
 -- =====================================================================================================================
@@ -393,4 +393,95 @@ CREATE TABLE imaging_attachments (
     PRIMARY KEY (id),
     KEY fk_ia_result (imaging_result_id),
     CONSTRAINT fk_ia_result FOREIGN KEY (imaging_result_id) REFERENCES imaging_results (id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- PHẦN 4. pet_clinic_billing_pharmacy_db (billing-pharmacy-service) - NV4a: medicines, inventory_transactions,
+-- prescriptions, prescription_items. Hai bảng hóa đơn (invoices, invoice_items) của NV4b thêm tiếp ở cuối file.
+-- visit_id / created_by / dispensed_by tham chiếu sang clinical_db, auth_db nên không có khóa ngoại vật lý.
+-- ---------------------------------------------------------------------------------------------------------------------
+CREATE DATABASE pet_clinic_billing_pharmacy_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE pet_clinic_billing_pharmacy_db;
+
+-- stock_quantity chỉ đổi qua UPDATE ... WHERE stock_quantity >= :qty (nhập kho, điều chỉnh, xuất thuốc), không gán rồi save().
+-- version: khóa lạc quan (@Version); bulk UPDATE trừ kho cố ý không tăng version (an toàn nhờ điều kiện WHERE).
+CREATE TABLE medicines (
+    id                BIGINT        NOT NULL AUTO_INCREMENT,
+    code              VARCHAR(50)   NOT NULL,
+    name              VARCHAR(150)  NOT NULL,
+    active_ingredient VARCHAR(150)  NULL,
+    dosage_form       VARCHAR(50)   NOT NULL,
+    unit              VARCHAR(30)   NOT NULL,
+    sale_price        DECIMAL(12, 2) NOT NULL,
+    stock_quantity    INT           NOT NULL DEFAULT 0,
+    min_stock_alert   INT           NOT NULL DEFAULT 10,
+    is_active         TINYINT(1)    NOT NULL DEFAULT 1,
+    version           BIGINT        NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    UNIQUE KEY code (code)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- Danh mục thuốc gốc (id 1-4). Tồn kho = số dư cuối của nhật ký kho bên dưới (một lần nhập lô đầu kỳ).
+INSERT INTO medicines (code, name, active_ingredient, dosage_form, unit, sale_price, stock_quantity, min_stock_alert) VALUES
+    ('MED_AMOX', 'Clavamox 250mg', 'Amoxicillin + Clavulanate', 'Viên nén', 'Viên', 15000.00, 250, 20),
+    ('MED_VANG_7B', 'Vaccine Vanguard Plus 5/L (7 bệnh)', 'Attenuated Virus', 'Lọ tiêm', 'Lọ', 180000.00, 60, 10),
+    ('MED_PURE_4B', 'Vaccine Purevax RCP (Mèo)', 'Attenuated Virus', 'Lọ tiêm', 'Lọ', 190000.00, 45, 10),
+    ('MED_DRON_DOG', 'Drontal Plus tẩy giun cho chó', 'Febantel, Pyrantel, Praziquantel', 'Viên nén', 'Viên', 45000.00, 110, 15);
+
+-- quantity: IMPORT và EXPORT_PRESCRIPTION luôn dương (chiều do loại giao dịch quyết định), riêng ADJUSTMENT mang dấu.
+-- reference_id = id đơn thuốc khi xuất theo đơn.
+CREATE TABLE inventory_transactions (
+    id               BIGINT       NOT NULL AUTO_INCREMENT,
+    medicine_id      BIGINT       NOT NULL,
+    transaction_type ENUM ('IMPORT', 'EXPORT_PRESCRIPTION', 'ADJUSTMENT') NOT NULL,
+    quantity         INT          NOT NULL,
+    balance_after    INT          NOT NULL,
+    reference_id     BIGINT       NULL,
+    notes            VARCHAR(255) NULL,
+    created_by       BIGINT       NOT NULL,
+    created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_it_med_date (medicine_id, created_at),
+    KEY idx_it_creator (created_by),
+    CONSTRAINT fk_it_medicine FOREIGN KEY (medicine_id) REFERENCES medicines (id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- created_by = 1: tài khoản admin seed ở PHẦN 1
+INSERT INTO inventory_transactions (medicine_id, transaction_type, quantity, balance_after, notes, created_by) VALUES
+    (1, 'IMPORT', 250, 250, 'Nhập lô đầu kỳ', 1),
+    (2, 'IMPORT', 60, 60, 'Nhập lô đầu kỳ', 1),
+    (3, 'IMPORT', 45, 45, 'Nhập lô đầu kỳ', 1),
+    (4, 'IMPORT', 110, 110, 'Nhập lô đầu kỳ', 1);
+
+-- visit_id UNIQUE: mỗi đợt khám tối đa một đơn; đơn đã hủy được dùng lại đúng dòng cũ khi kê lại
+CREATE TABLE prescriptions (
+    id           BIGINT    NOT NULL AUTO_INCREMENT,
+    visit_id     BIGINT    NOT NULL,
+    doctor_notes TEXT      NULL,
+    status       ENUM ('PRESCRIBED', 'DISPENSED', 'CANCELLED') NOT NULL DEFAULT 'PRESCRIBED',
+    dispensed_by BIGINT    NULL,
+    dispensed_at TIMESTAMP NULL DEFAULT NULL,
+    created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY visit_id (visit_id),
+    KEY idx_prescriptions_visit (visit_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- unit_price là snapshot giá bán lúc kê đơn (BR-26)
+CREATE TABLE prescription_items (
+    id              BIGINT        NOT NULL AUTO_INCREMENT,
+    prescription_id BIGINT        NOT NULL,
+    medicine_id     BIGINT        NOT NULL,
+    quantity        INT           NOT NULL,
+    unit_price      DECIMAL(12, 2) NOT NULL,
+    subtotal        DECIMAL(12, 2) NOT NULL,
+    dosage          VARCHAR(100)  NOT NULL,
+    frequency       VARCHAR(100)  NOT NULL,
+    duration_days   INT           NOT NULL,
+    instructions    TEXT          NULL,
+    PRIMARY KEY (id),
+    KEY fk_pi_prescription (prescription_id),
+    KEY fk_pi_medicine (medicine_id),
+    CONSTRAINT fk_pi_medicine FOREIGN KEY (medicine_id) REFERENCES medicines (id),
+    CONSTRAINT fk_pi_prescription FOREIGN KEY (prescription_id) REFERENCES prescriptions (id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;

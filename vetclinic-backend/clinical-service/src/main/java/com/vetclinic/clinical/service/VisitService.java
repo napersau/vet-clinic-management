@@ -7,16 +7,19 @@ import com.vetclinic.clinical.dto.request.CloseVisitRequest;
 import com.vetclinic.clinical.dto.request.OrderServicesRequest;
 import com.vetclinic.clinical.dto.request.ReasonRequest;
 import com.vetclinic.clinical.dto.request.StartExamRequest;
+import com.vetclinic.clinical.dto.response.BillableServiceResponse;
 import com.vetclinic.clinical.dto.response.VisitHistoryResponse;
 import com.vetclinic.clinical.dto.response.VisitResponse;
+import com.vetclinic.clinical.dto.response.VisitSummaryResponse;
 import com.vetclinic.common.dto.PageResponse;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 
 /**
  * Vòng đời một đợt khám ngoại trú hai pha (SM-01): tiếp nhận, hàng đợi, phân công, hủy (NV1) và khám hai giai đoạn (NV2).
- * Hoàn tất sau thanh toán / dịch vụ tính tiền (NV4) và mở lại ca (NV5) bổ sung sau.
+ * Hoàn tất sau thanh toán (NV4b) và mở lại ca (NV5) bổ sung sau.
  */
 public interface VisitService {
 
@@ -60,4 +63,15 @@ public interface VisitService {
 
     /** Danh sách ca của Bác sĩ đang đăng nhập: chờ vào phòng, đang khám, chờ tái khám. */
     List<VisitResponse> myVisits();
+
+    // ------------------------------------------------------------------ không cần người dùng đăng nhập (/internal)
+
+    /** Cho billing-pharmacy-service lập hóa đơn: chỉ dịch vụ COMPLETED. */
+    List<BillableServiceResponse> billableServices(Long visitId);
+
+    /** Cho billing-pharmacy-service: thông tin rút gọn của một đợt khám (quyền kê đơn, quyền xem của chủ nuôi). */
+    VisitSummaryResponse summary(Long visitId);
+
+    /** Như summary nhưng theo lô; id không tồn tại thì bị bỏ qua (dùng làm giàu danh sách). */
+    List<VisitSummaryResponse> summaries(Collection<Long> visitIds);
 }

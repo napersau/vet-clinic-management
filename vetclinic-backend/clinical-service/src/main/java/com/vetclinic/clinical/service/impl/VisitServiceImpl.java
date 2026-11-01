@@ -14,9 +14,11 @@ import com.vetclinic.clinical.dto.request.ReasonRequest;
 import com.vetclinic.clinical.dto.request.ServiceOrderItem;
 import com.vetclinic.clinical.dto.request.StartExamRequest;
 import com.vetclinic.clinical.dto.response.AppointmentSummaryResponse;
+import com.vetclinic.clinical.dto.response.BillableServiceResponse;
 import com.vetclinic.clinical.dto.response.UserSummaryResponse;
 import com.vetclinic.clinical.dto.response.VisitHistoryResponse;
 import com.vetclinic.clinical.dto.response.VisitResponse;
+import com.vetclinic.clinical.dto.response.VisitSummaryResponse;
 import com.vetclinic.clinical.entity.ClinicService;
 import com.vetclinic.clinical.entity.Pet;
 import com.vetclinic.clinical.entity.PetVisit;
@@ -58,6 +60,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -508,6 +511,41 @@ public class VisitServiceImpl implements VisitService {
         return assembler.summaries(visitRepository.findByDoctorIdAndStatusInOrderByCheckedInAtAscIdAsc(
                 SecurityUtils.getCurrentUserId(),
                 List.of(VisitStatus.WAITING, VisitStatus.IN_PROGRESS, VisitStatus.RESULTS_READY)));
+    }
+
+    // ================================================================== không cần người dùng đăng nhập
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<BillableServiceResponse> billableServices(Long visitId) {
+        if (!visitRepository.existsById(visitId)) {
+            throw new AppException(ErrorCode.VISIT_NOT_FOUND);
+        }
+        return detailRepository.findByVisitIdAndStatusOrderByIdAsc(visitId, ServiceDetailStatus.COMPLETED).stream()
+                .map(d -> new BillableServiceResponse(d.getService().getId(), d.getService().getCode(),
+                        d.getService().getName(), d.getService().getCategory(), d.getQuantity(), d.getUnitPrice(),
+                        d.getSubtotal())).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public VisitSummaryResponse summary(Long visitId) {
+        return visitRepository.findWithPetById(visitId).map(VisitServiceImpl::toSummary)
+                .orElseThrow(() -> new AppException(ErrorCode.VISIT_NOT_FOUND));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<VisitSummaryResponse> summaries(Collection<Long> visitIds) {
+        if (visitIds == null || visitIds.isEmpty()) {
+            return List.of();
+        }
+        return visitRepository.findWithPetByIdIn(visitIds).stream().map(VisitServiceImpl::toSummary).toList();
+    }
+
+    private static VisitSummaryResponse toSummary(PetVisit v) {
+        return new VisitSummaryResponse(v.getId(), v.getVisitCode(), v.getStatus(), v.getPet().getId(),
+                v.getPet().getName(), v.getPet().getOwnerId(), v.getDoctorId());
     }
 
     // ================================================================== helper

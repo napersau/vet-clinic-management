@@ -1,0 +1,76 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: billing-pharmacy-service
+  autoconfigure:
+    # Xác thực do Gateway đảm nhận; tắt user/password mặc định mà Boot tự sinh
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  datasource:
+    # Instant lưu UTC; TIMESTAMP của MySQL quy đổi theo session time zone nên ép session = UTC
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/pet_clinic_billing_pharmacy_db?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:vetclinic_dev}
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 10000
+  jpa:
+    open-in-view: false        # Giải phóng connection ngay sau khi Service kết thúc
+    hibernate:
+      ddl-auto: validate       # Schema chỉ thay đổi qua docs/schema_init.sql
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+          batch_size: 50
+        default_batch_fetch_size: 50   # Nạp lười collection theo lô, tránh N+1 khi liệt kê đơn thuốc / hóa đơn
+        order_inserts: true
+        order_updates: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:vetclinic}
+    password: ${RABBITMQ_PASSWORD:vetclinic_dev}
+    listener:
+      simple:
+        default-requeue-rejected: false   # Hết retry -> đẩy sang DLQ, không requeue vô hạn
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000ms
+          multiplier: 2
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: 3000
+            read-timeout: 5000
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+    registry-fetch-interval-seconds: 5
+  instance:
+    prefer-ip-address: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+vetclinic:
+  billing:
+    zone: Asia/Ho_Chi_Minh          # Múi giờ vận hành phòng khám (năm trong mã hóa đơn)
+    # Chưa có quyết định thuế suất từ nhóm (CLAUDE.md §8) -> mặc định 0%
+    vat:
+      service-rate: 0.00
+      medicine-rate: 0.00

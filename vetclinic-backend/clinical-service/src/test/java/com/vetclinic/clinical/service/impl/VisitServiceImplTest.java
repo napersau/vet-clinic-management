@@ -595,6 +595,37 @@ class VisitServiceImplTest {
         assertThat(service.myVisits()).extracting(VisitResponse::id).containsExactly(100L, 101L);
     }
 
+    // ================================================================== nội bộ (cho billing-pharmacy-service)
+
+    @Test
+    void billableServices_onlyIncludesCompletedLines() {
+        ClinicService exam = service(1L, "EXAM_GEN", ServiceCategory.EXAMINATION, "100000.00");
+        when(visitRepository.existsById(100L)).thenReturn(true);
+        when(detailRepository.findByVisitIdAndStatusOrderByIdAsc(100L, ServiceDetailStatus.COMPLETED))
+                .thenReturn(List.of(detail(1L, 100L, exam, ServiceDetailStatus.COMPLETED)));
+
+        var lines = service.billableServices(100L);
+
+        assertThat(lines).hasSize(1);
+        assertThat(lines.get(0).code()).isEqualTo("EXAM_GEN");
+        assertThat(lines.get(0).subtotal()).isEqualByComparingTo("100000.00");
+    }
+
+    @Test
+    void summary_returnsStatusDoctorAndOwnerOrVisitNotFound_andSummariesSkipsAnEmptyList() {
+        when(visitRepository.findWithPetById(100L)).thenReturn(Optional.of(visit(100L, VisitStatus.IN_PROGRESS, DOCTOR)));
+        when(visitRepository.findWithPetById(404L)).thenReturn(Optional.empty());
+
+        var summary = service.summary(100L);
+        assertThat(summary.status()).isEqualTo(VisitStatus.IN_PROGRESS);
+        assertThat(summary.doctorId()).isEqualTo(DOCTOR);
+        assertThat(summary.ownerId()).isEqualTo(OWNER);
+        assertError(ErrorCode.VISIT_NOT_FOUND, () -> service.summary(404L));
+        assertError(ErrorCode.VISIT_NOT_FOUND, () -> service.billableServices(404L));
+        assertThat(service.summaries(List.of())).isEmpty();
+        verify(visitRepository, never()).findWithPetByIdIn(any());
+    }
+
     // ================================================================== tra cứu
 
     @Test

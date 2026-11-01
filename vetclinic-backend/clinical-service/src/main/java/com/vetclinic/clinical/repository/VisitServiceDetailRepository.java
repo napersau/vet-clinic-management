@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Chỉ định dịch vụ trong đợt khám. Các truy vấn dịch vụ tính tiền (NV4a) và bệnh án / báo cáo (NV5) thêm khi chuyển phần đó.
+ * Chỉ định dịch vụ trong đợt khám. Truy vấn báo cáo vận hành (NV5) thêm khi chuyển phần đó.
  */
 @Repository
 public interface VisitServiceDetailRepository extends JpaRepository<VisitServiceDetail, Long> {
@@ -31,6 +31,9 @@ public interface VisitServiceDetailRepository extends JpaRepository<VisitService
 
     @EntityGraph(attributePaths = "service")
     List<VisitServiceDetail> findByVisitIdInOrderByIdAsc(Collection<Long> visitIds);
+
+    @EntityGraph(attributePaths = "service")
+    List<VisitServiceDetail> findByVisitIdAndStatusOrderByIdAsc(Long visitId, ServiceDetailStatus status);
 
     @EntityGraph(attributePaths = "service")
     @Query("select d from VisitServiceDetail d where d.service.category = :category and d.status in :statuses "
