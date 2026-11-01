@@ -45,6 +45,27 @@ public interface PetVisitRepository extends JpaRepository<PetVisit, Long>, JpaSp
     @EntityGraph(attributePaths = {"pet", "pet.species"})
     List<PetVisit> findByDoctorIdAndStatusInOrderByCheckedInAtAscIdAsc(Long doctorId, Collection<VisitStatus> statuses);
 
+    @EntityGraph(attributePaths = {"pet", "pet.species"})
+    List<PetVisit> findByPetIdOrderByIdDesc(Long petId);
+
+    @EntityGraph(attributePaths = {"pet", "pet.species"})
+    org.springframework.data.domain.Page<PetVisit> findByPetId(Long petId, org.springframework.data.domain.Pageable pageable);
+
+    @EntityGraph(attributePaths = {"pet", "pet.species"})
+    org.springframework.data.domain.Page<PetVisit> findByPetIdAndStatus(Long petId, VisitStatus status,
+                                                                        org.springframework.data.domain.Pageable pageable);
+
+    /** Báo cáo vận hành: số ca theo trạng thái, ngày check-in trong [start, end). */
+    @Query("select v.status, count(v) from PetVisit v where v.checkedInAt >= :start and v.checkedInAt < :end group by v.status")
+    List<Object[]> countByStatusBetween(@Param("start") java.time.Instant start, @Param("end") java.time.Instant end);
+
+    @Query("select count(v) from PetVisit v where v.emergency = true and v.checkedInAt >= :start and v.checkedInAt < :end")
+    long countEmergencyBetween(@Param("start") java.time.Instant start, @Param("end") java.time.Instant end);
+
+    @Query("select v.doctorId, v.status, count(v) from PetVisit v where v.doctorId is not null "
+            + "and v.checkedInAt >= :start and v.checkedInAt < :end group by v.doctorId, v.status")
+    List<Object[]> countByDoctorAndStatusBetween(@Param("start") java.time.Instant start, @Param("end") java.time.Instant end);
+
     boolean existsByPetIdAndStatusIn(Long petId, Collection<VisitStatus> statuses);
 
     boolean existsByAppointmentId(Long appointmentId);
@@ -54,7 +75,6 @@ public interface PetVisitRepository extends JpaRepository<PetVisit, Long>, JpaSp
     boolean existsByDoctorIdAndStatusAndCallbackPostponedAtIsNull(Long doctorId, VisitStatus status);
 
     // ---- Trạng thái Bác sĩ (tính động): chỉ cần biết bác sĩ nào đang ở tình trạng nào
-
     @Query("select distinct v.doctorId from PetVisit v where v.doctorId is not null and v.status in :statuses")
     Set<Long> findDoctorIdsWithStatusIn(@Param("statuses") Collection<VisitStatus> statuses);
 

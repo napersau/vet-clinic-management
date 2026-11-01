@@ -31,7 +31,7 @@ import java.util.List;
 
 /**
  * Đợt khám ngoại trú hai pha. Chuyển trạng thái dùng POST theo quy chuẩn Action Endpoint.
- * Mở lại ca đã chốt (POST /{id}/reopen, chỉ Admin) thêm ở NV5 vì cần hủy hóa đơn bên billing.
+ * Mở lại ca đã chốt (POST /{id}/reopen, chỉ Admin) cần hủy hóa đơn bên billing.
  */
 @RestController
 @RequestMapping("/api/v1/clinical/pet-visits")
@@ -133,6 +133,13 @@ public class VisitController {
     @PreAuthorize("hasAnyRole('RECEPTIONIST','VETERINARIAN')")
     public ResponseEntity<ApiResponse<VisitResponse>> abandon(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success("Đã đóng ca, ghi nợ viện phí", visitService.abandon(id)));
+    }
+
+    /** Mở lại đợt khám đã chốt (chưa thu tiền) để điều chỉnh chuyên môn. Chỉ Admin, bắt buộc lý do. */
+    @PostMapping("/{id}/reopen")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<VisitResponse>> reopen(@PathVariable Long id, @Valid @RequestBody ReasonRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Đã mở lại đợt khám", visitService.reopen(id, request)));
     }
 
     @PostMapping("/{id}/cancel")

@@ -2,6 +2,7 @@ package com.vetclinic.clinical.service.impl;
 
 import com.vetclinic.clinical.client.AppointmentClient;
 import com.vetclinic.clinical.client.AuthClient;
+import com.vetclinic.clinical.client.BillingClient;
 import com.vetclinic.clinical.constant.DoctorStatus;
 import com.vetclinic.clinical.constant.ServiceCategory;
 import com.vetclinic.clinical.constant.ServiceDetailStatus;
@@ -35,6 +36,7 @@ import com.vetclinic.clinical.service.VisitSupport;
 import com.vetclinic.common.dto.ApiResponse;
 import com.vetclinic.common.event.VisitCheckedInEvent;
 import com.vetclinic.common.event.VisitClosedToPaymentEvent;
+import com.vetclinic.common.exception.AppException;
 import com.vetclinic.common.exception.ErrorCode;
 import com.vetclinic.common.lock.NamedLockService;
 import com.vetclinic.common.security.RoleCode;
@@ -91,6 +93,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class VisitServiceImplTest {
 
+    private static final long ADMIN_ID = 1L;
+
     @Mock
     private PetVisitRepository visitRepository;
     @Mock
@@ -107,6 +111,8 @@ class VisitServiceImplTest {
     private AuthClient authClient;
     @Mock
     private AppointmentClient appointmentClient;
+    @Mock
+    private BillingClient billingClient;
     @Mock
     private DoctorStatusService doctorStatusService;
     @Mock
@@ -128,7 +134,7 @@ class VisitServiceImplTest {
         lenient().when(lockService.runLocked(anyCollection(), any())).thenAnswer(inv ->
                 ((Supplier<?>) inv.getArgument(1)).get());
         service = new VisitServiceImpl(visitRepository, petRepository, historyRepository, detailRepository,
-                serviceRepository, authClient, appointmentClient, doctorStatusService, support, assembler,
+                serviceRepository, authClient, appointmentClient, billingClient, doctorStatusService, support, assembler,
                 lockService, publisher, CLOCK, tm);
     }
 
@@ -555,6 +561,64 @@ class VisitServiceImplTest {
 
         assertError(ErrorCode.INVALID_STATUS_TRANSITION, () -> service.closeVisit(100L, request));
         assertError(ErrorCode.VISIT_NOT_ASSIGNED_TO_YOU, () -> service.closeVisit(101L, request));
+    }
+
+    // ================================================================== mở lại đợt khám (T12)
+
+    @Test
+    void reopen_movesAClosedVisitBackToInProgressAndCancelsTheInvoiceFirst() {
+        loginAs(ADMIN_ID, RoleCode.ADMIN);
+        PetVisit visit = visit(100L, VisitStatus.WAITING_PAYMENT, DOCTOR);
+        visit.setClosedAt(Instant.parse("2026-10-30T01:30:00Z"));
+        when(visitRepository.findWithPetById(100L)).thenReturn(Optional.of(visit));
+        when(visitRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(visit));
+        when(doctorStatusService.statusOf(DOCTOR)).thenReturn(DoctorStatus.AVAILABLE);
+
+        VisitResponse response = service.reopen(100L, new ReasonRequest("  Nhập sai liều thuốc "));
+
+        assertThat(response.status()).isEqualTo(VisitStatus.IN_PROGRESS);
+        assertThat(response.locked()).isFalse();            // hồ sơ được mở khóa để sửa
+        assertThat(response.closedAt()).isNull();
+        verify(billingClient).cancelInvoiceForReopen(100L);
+        PetVisitStatusHistory history = lastHistory();
+        assertThat(history.getFromStatus()).isEqualTo(VisitStatus.WAITING_PAYMENT);
+        assertThat(history.getToStatus()).isEqualTo(VisitStatus.IN_PROGRESS);
+        assertThat(history.getChangedByUserId()).isEqualTo(ADMIN_ID);
+        assertThat(history.getNotes()).contains("Nhập sai liều thuốc");
+    }
+
+    @Test
+    void reopen_isRefusedWhenTheDoctorIsBusy_andTheInvoiceIsLeftAlone() {
+        loginAs(ADMIN_ID, RoleCode.ADMIN);
+        when(visitRepository.findWithPetById(100L)).thenReturn(Optional.of(visit(100L, VisitStatus.WAITING_PAYMENT, DOCTOR)));
+        when(doctorStatusService.statusOf(DOCTOR)).thenReturn(DoctorStatus.BUSY);
+
+        assertError(ErrorCode.DOCTOR_NOT_AVAILABLE, () -> service.reopen(100L, new ReasonRequest("Điều chỉnh")));
+        verify(billingClient, never()).cancelInvoiceForReopen(any());   // không hủy hóa đơn rồi mới phát hiện không mở lại được
+    }
+
+    @Test
+    void reopen_onlyForVisitsAwaitingPayment() {
+        loginAs(ADMIN_ID, RoleCode.ADMIN);
+        when(visitRepository.findWithPetById(100L)).thenReturn(Optional.of(visit(100L, VisitStatus.COMPLETED, DOCTOR)));
+        when(visitRepository.findWithPetById(101L)).thenReturn(Optional.of(visit(101L, VisitStatus.IN_PROGRESS, DOCTOR)));
+        when(visitRepository.findWithPetById(404L)).thenReturn(Optional.empty());
+
+        assertError(ErrorCode.INVALID_STATUS_TRANSITION, () -> service.reopen(100L, new ReasonRequest("x")));   // đã hoàn tất, khóa vĩnh viễn
+        assertError(ErrorCode.INVALID_STATUS_TRANSITION, () -> service.reopen(101L, new ReasonRequest("x")));
+        assertError(ErrorCode.VISIT_NOT_FOUND, () -> service.reopen(404L, new ReasonRequest("x")));
+        verify(billingClient, never()).cancelInvoiceForReopen(any());
+    }
+
+    @Test
+    void reopen_isRefusedAfterThePaymentWasCollected() {
+        loginAs(ADMIN_ID, RoleCode.ADMIN);
+        when(visitRepository.findWithPetById(100L)).thenReturn(Optional.of(visit(100L, VisitStatus.WAITING_PAYMENT, DOCTOR)));
+        when(doctorStatusService.statusOf(DOCTOR)).thenReturn(DoctorStatus.AVAILABLE);
+        when(billingClient.cancelInvoiceForReopen(100L)).thenThrow(new AppException(ErrorCode.INVOICE_ALREADY_PAID));
+
+        assertError(ErrorCode.INVOICE_ALREADY_PAID, () -> service.reopen(100L, new ReasonRequest("Điều chỉnh")));
+        verify(visitRepository, never()).findByIdForUpdate(any());   // ca không bị đụng tới
     }
 
     // ================================================================== khách bỏ về (EX-11)

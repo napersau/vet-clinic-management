@@ -7,12 +7,15 @@ import com.vetclinic.clinical.dto.request.UpdatePetRequest;
 import com.vetclinic.clinical.dto.response.PetResponse;
 import com.vetclinic.clinical.dto.response.PetSummaryResponse;
 import com.vetclinic.clinical.dto.response.UserSummaryResponse;
+import com.vetclinic.clinical.dto.response.VisitResponse;
 import com.vetclinic.clinical.entity.Pet;
 import com.vetclinic.clinical.entity.Species;
 import com.vetclinic.clinical.mapper.ClinicalMapper;
 import com.vetclinic.clinical.repository.PetRepository;
+import com.vetclinic.clinical.repository.PetVisitRepository;
 import com.vetclinic.clinical.repository.SpeciesRepository;
 import com.vetclinic.clinical.service.PetService;
+import com.vetclinic.clinical.service.VisitAssembler;
 import com.vetclinic.common.dto.ApiResponse;
 import com.vetclinic.common.dto.PageResponse;
 import com.vetclinic.common.exception.AppException;
@@ -44,17 +47,22 @@ public class PetServiceImpl implements PetService {
 
     private final PetRepository petRepository;
     private final SpeciesRepository speciesRepository;
+    private final PetVisitRepository visitRepository;
     private final AuthClient authClient;
     private final ClinicalMapper mapper;
+    private final VisitAssembler assembler;
     private final Clock clock;
     private final TransactionTemplate transactionTemplate;
 
-    public PetServiceImpl(PetRepository petRepository, SpeciesRepository speciesRepository, AuthClient authClient,
-                          ClinicalMapper mapper, Clock clock, PlatformTransactionManager transactionManager) {
+    public PetServiceImpl(PetRepository petRepository, SpeciesRepository speciesRepository,
+                          PetVisitRepository visitRepository, AuthClient authClient, ClinicalMapper mapper,
+                          VisitAssembler assembler, Clock clock, PlatformTransactionManager transactionManager) {
         this.petRepository = petRepository;
         this.speciesRepository = speciesRepository;
+        this.visitRepository = visitRepository;
         this.authClient = authClient;
         this.mapper = mapper;
+        this.assembler = assembler;
         this.clock = clock;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
@@ -174,6 +182,14 @@ public class PetServiceImpl implements PetService {
         Page<Pet> result = petRepository.findAll(spec, pageable);
         return PageResponse.of(result.getContent(), result.getNumber(), result.getSize(), result.getTotalElements(),
                 result.getTotalPages(), result.isLast(), mapper::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<VisitResponse> getVisits(Long petId) {
+        Pet pet = findPet(petId);
+        assertOwnerAccess(currentActor(), pet);
+        return assembler.summaries(visitRepository.findByPetIdOrderByIdDesc(petId));
     }
 
     @Override

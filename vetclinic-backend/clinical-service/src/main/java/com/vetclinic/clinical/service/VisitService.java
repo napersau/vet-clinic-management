@@ -19,7 +19,7 @@ import java.util.List;
 
 /**
  * Vòng đời một đợt khám ngoại trú hai pha (SM-01): tiếp nhận, hàng đợi, phân công, hủy (NV1) và khám hai giai đoạn (NV2).
- * Mở lại ca đã chốt (NV5) bổ sung sau.
+ * Mở lại ca đã chốt (T12) do Admin thực hiện.
  */
 public interface VisitService {
 
@@ -57,6 +57,13 @@ public interface VisitService {
 
     /** EX-11: khách bỏ về hẳn không đọc kết quả. RESULTS_READY -> COMPLETED, ghi nợ viện phí. */
     VisitResponse abandon(Long id);
+
+    /**
+     * Mở lại đợt khám đã chốt để điều chỉnh chuyên môn (T12, "người có thẩm quyền" = Admin): WAITING_PAYMENT -> IN_PROGRESS,
+     * bỏ khóa hồ sơ, hủy hóa đơn PENDING bên billing. Chỉ khi chưa thu tiền và bác sĩ phụ trách đang không BUSY. Chốt lại bằng
+     * close-visit thì hóa đơn được dựng lại với nội dung mới.
+     */
+    VisitResponse reopen(Long id, ReasonRequest request);
 
     /** EX-03 / FR-26 / FR-34 / FR-45: hủy đợt khám. */
     VisitResponse cancel(Long id, ReasonRequest request);

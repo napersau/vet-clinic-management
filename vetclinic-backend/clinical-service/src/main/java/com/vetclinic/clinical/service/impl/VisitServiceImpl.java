@@ -2,6 +2,7 @@ package com.vetclinic.clinical.service.impl;
 
 import com.vetclinic.clinical.client.AppointmentClient;
 import com.vetclinic.clinical.client.AuthClient;
+import com.vetclinic.clinical.client.BillingClient;
 import com.vetclinic.clinical.constant.DoctorStatus;
 import com.vetclinic.clinical.constant.ServiceCategory;
 import com.vetclinic.clinical.constant.ServiceDetailStatus;
@@ -82,6 +83,7 @@ public class VisitServiceImpl implements VisitService {
     private final ClinicServiceRepository serviceRepository;
     private final AuthClient authClient;
     private final AppointmentClient appointmentClient;
+    private final BillingClient billingClient;
     private final DoctorStatusService doctorStatusService;
     private final VisitSupport support;
     private final VisitAssembler assembler;
@@ -93,7 +95,7 @@ public class VisitServiceImpl implements VisitService {
     public VisitServiceImpl(PetVisitRepository visitRepository, PetRepository petRepository,
                             PetVisitStatusHistoryRepository historyRepository,
                             VisitServiceDetailRepository detailRepository, ClinicServiceRepository serviceRepository,
-                            AuthClient authClient, AppointmentClient appointmentClient,
+                            AuthClient authClient, AppointmentClient appointmentClient, BillingClient billingClient,
                             DoctorStatusService doctorStatusService, VisitSupport support, VisitAssembler assembler,
                             NamedLockService lockService, ApplicationEventPublisher eventPublisher, Clock clock,
                             PlatformTransactionManager transactionManager) {
@@ -104,6 +106,7 @@ public class VisitServiceImpl implements VisitService {
         this.serviceRepository = serviceRepository;
         this.authClient = authClient;
         this.appointmentClient = appointmentClient;
+        this.billingClient = billingClient;
         this.doctorStatusService = doctorStatusService;
         this.support = support;
         this.assembler = assembler;
@@ -438,6 +441,45 @@ public class VisitServiceImpl implements VisitService {
                 "Bác sĩ chốt chuyên môn, khóa hồ sơ bệnh án và chuyển sang thanh toán");
         publishClosed(visit, doctorId, false);
         return assembler.detail(visit);
+    }
+
+    /**
+     * KHÔNG @Transactional: lời gọi sang billing nằm ngoài transaction, khóa bác sĩ giữ cho tới sau commit. Thứ tự: kiểm tra ca
+     * và bác sĩ -> hủy hóa đơn PENDING bên billing -> [transaction: kiểm tra lại + mở lại]. Nếu sập giữa chừng (hóa đơn đã hủy
+     * mà ca còn WAITING_PAYMENT) thì gọi lại reopen là xong (billing idempotent), hoặc lễ tân lập lại hóa đơn bằng from-visit.
+     */
+    @Override
+    public VisitResponse reopen(Long id, ReasonRequest request) {
+        Actor actor = currentActor();
+        String reason = request.reason().trim();
+        PetVisit current = visitRepository.findWithPetById(id).orElseThrow(() -> new AppException(ErrorCode.VISIT_NOT_FOUND));
+        if (current.getStatus() != VisitStatus.WAITING_PAYMENT) {
+            throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION, "Chỉ mở lại được ca đang chờ thanh toán (WAITING_PAYMENT)");
+        }
+        Long doctorId = current.getDoctorId();
+        return lockService.runLocked(List.of("vetclinic:doctor:" + doctorId), () -> {
+            assertDoctorNotBusy(doctorId);   // kiểm tra TRƯỚC khi hủy hóa đơn để không hủy rồi mới phát hiện không mở lại được
+            billingClient.cancelInvoiceForReopen(id);
+            return transactionTemplate.execute(tx -> applyReopen(actor.id(), id, doctorId, reason));
+        });
+    }
+
+    private VisitResponse applyReopen(Long adminId, Long visitId, Long doctorId, String reason) {
+        PetVisit visit = support.lock(visitId);
+        support.assertStatus(visit, VisitStatus.WAITING_PAYMENT, "Chỉ mở lại được ca đang chờ thanh toán (WAITING_PAYMENT)");
+        assertDoctorNotBusy(doctorId);
+        visit.setClosedAt(null);
+        visit.setCallbackPostponedAt(null);
+        support.transition(visit, VisitStatus.IN_PROGRESS, adminId,
+                "Mở lại đợt khám để điều chỉnh chuyên môn, hóa đơn chờ thanh toán đã hủy: " + reason);
+        return assembler.detail(visit);
+    }
+
+    private void assertDoctorNotBusy(Long doctorId) {
+        if (doctorId == null || doctorStatusService.statusOf(doctorId) == DoctorStatus.BUSY) {
+            throw new AppException(ErrorCode.DOCTOR_NOT_AVAILABLE,
+                    "Bác sĩ phụ trách đang bận ca khác, hãy mở lại khi bác sĩ rảnh");
+        }
     }
 
     @Override

@@ -8,8 +8,14 @@ import com.vetclinic.clinical.dto.response.PetResponse;
 import com.vetclinic.clinical.dto.response.UserSummaryResponse;
 import com.vetclinic.clinical.entity.Pet;
 import com.vetclinic.clinical.mapper.ClinicalMapperImpl;
+import com.vetclinic.clinical.repository.ImagingAttachmentRepository;
+import com.vetclinic.clinical.repository.ImagingResultRepository;
+import com.vetclinic.clinical.repository.LabTestResultRepository;
 import com.vetclinic.clinical.repository.PetRepository;
+import com.vetclinic.clinical.repository.PetVisitRepository;
 import com.vetclinic.clinical.repository.SpeciesRepository;
+import com.vetclinic.clinical.repository.VisitServiceDetailRepository;
+import com.vetclinic.clinical.service.VisitAssembler;
 import com.vetclinic.common.dto.ApiResponse;
 import com.vetclinic.common.exception.ErrorCode;
 import com.vetclinic.common.security.RoleCode;
@@ -54,14 +60,19 @@ class PetServiceImplTest {
     @Mock
     private SpeciesRepository speciesRepository;
     @Mock
+    private PetVisitRepository visitRepository;
+    @Mock
     private AuthClient authClient;
 
     private PetServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new PetServiceImpl(petRepository, speciesRepository, authClient, new ClinicalMapperImpl(), CLOCK,
-                mock(PlatformTransactionManager.class));
+        VisitAssembler assembler = new VisitAssembler(mock(VisitServiceDetailRepository.class),
+                mock(LabTestResultRepository.class), mock(ImagingResultRepository.class),
+                mock(ImagingAttachmentRepository.class));
+        service = new PetServiceImpl(petRepository, speciesRepository, visitRepository, authClient,
+                new ClinicalMapperImpl(), assembler, CLOCK, mock(PlatformTransactionManager.class));
         lenient().when(speciesRepository.findById(1L)).thenReturn(Optional.of(dog()));
         lenient().when(petRepository.saveAndFlush(any(Pet.class))).thenAnswer(inv -> {
             Pet saved = inv.getArgument(0);

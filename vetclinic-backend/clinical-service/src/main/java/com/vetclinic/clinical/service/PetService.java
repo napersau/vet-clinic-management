@@ -4,6 +4,7 @@ import com.vetclinic.clinical.dto.request.CreatePetRequest;
 import com.vetclinic.clinical.dto.request.UpdatePetRequest;
 import com.vetclinic.clinical.dto.response.PetResponse;
 import com.vetclinic.clinical.dto.response.PetSummaryResponse;
+import com.vetclinic.clinical.dto.response.VisitResponse;
 import com.vetclinic.common.dto.PageResponse;
 
 import java.util.Collection;
@@ -20,6 +21,9 @@ public interface PetService {
 
     /** Chủ nuôi chỉ thấy thú cưng của mình. Lọc theo chủ nuôi và từ khóa (tên, mã hồ sơ). */
     PageResponse<PetResponse> search(Long ownerId, String keyword, int page, int size);
+
+    /** UC-38: dòng thời gian các đợt khám của thú cưng, mới nhất trước. */
+    List<VisitResponse> getVisits(Long petId);
 
     /** Cho appointment-service kiểm tra thú cưng tồn tại và thuộc đúng chủ nuôi. */
     PetSummaryResponse getSummary(Long id);
