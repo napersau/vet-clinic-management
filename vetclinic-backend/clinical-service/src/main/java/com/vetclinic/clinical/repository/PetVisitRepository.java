@@ -30,6 +30,9 @@ public interface PetVisitRepository extends JpaRepository<PetVisit, Long>, JpaSp
     @EntityGraph(attributePaths = {"pet", "pet.species"})
     Optional<PetVisit> findWithPetById(Long id);
 
+    @EntityGraph(attributePaths = {"pet", "pet.species"})
+    List<PetVisit> findWithPetByIdIn(Collection<Long> ids);
+
     /**
      * Hàng đợi sảnh (nghiệp vụ §8.4 / §9): 1) cấp cứu tuyệt đối; 2) có hẹn đúng khung giờ, theo giờ hẹn; 3) vãng lai và khách
      * hẹn nhưng đến trễ, theo giờ check-in (FIFO). Trong mỗi nhóm cùng mốc thì theo giờ check-in rồi id.

@@ -21,6 +21,9 @@ import com.vetclinic.clinical.entity.PetVisit;
 import com.vetclinic.clinical.entity.PetVisitStatusHistory;
 import com.vetclinic.clinical.entity.VisitServiceDetail;
 import com.vetclinic.clinical.repository.ClinicServiceRepository;
+import com.vetclinic.clinical.repository.ImagingAttachmentRepository;
+import com.vetclinic.clinical.repository.ImagingResultRepository;
+import com.vetclinic.clinical.repository.LabTestResultRepository;
 import com.vetclinic.clinical.repository.PetRepository;
 import com.vetclinic.clinical.repository.PetVisitRepository;
 import com.vetclinic.clinical.repository.PetVisitStatusHistoryRepository;
@@ -115,15 +118,18 @@ class VisitServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        VisitSupport support = new VisitSupport(visitRepository, historyRepository, detailHistoryRepository);
+        VisitSupport support = new VisitSupport(visitRepository, historyRepository, detailRepository,
+                detailHistoryRepository, publisher, CLOCK);
+        VisitAssembler assembler = new VisitAssembler(detailRepository, mock(LabTestResultRepository.class),
+                mock(ImagingResultRepository.class), mock(ImagingAttachmentRepository.class));
         PlatformTransactionManager tm = mock(PlatformTransactionManager.class);
         lenient().when(tm.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         // Khóa tên giả: chạy thẳng action, giống khi lấy được khóa
         lenient().when(lockService.runLocked(anyCollection(), any())).thenAnswer(inv ->
                 ((Supplier<?>) inv.getArgument(1)).get());
         service = new VisitServiceImpl(visitRepository, petRepository, historyRepository, detailRepository,
-                serviceRepository, authClient, appointmentClient, doctorStatusService, support,
-                new VisitAssembler(detailRepository), lockService, publisher, CLOCK, tm);
+                serviceRepository, authClient, appointmentClient, doctorStatusService, support, assembler,
+                lockService, publisher, CLOCK, tm);
     }
 
     @AfterEach

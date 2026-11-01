@@ -15,6 +15,10 @@ spring:
     hikari:
       maximum-pool-size: 10
       connection-timeout: 10000
+  servlet:
+    multipart:
+      max-file-size: 20MB               # ImagingStorage.MAX_FILE_BYTES
+      max-request-size: 60MB
   jpa:
     open-in-view: false        # Giải phóng connection ngay sau khi Service kết thúc
     hibernate:
@@ -47,7 +51,6 @@ spring:
           default:
             connect-timeout: 3000
             read-timeout: 5000
-  # NV3 (cận lâm sàng) thêm: spring.servlet.multipart (ảnh CĐHA 20MB), vetclinic.storage
 
 eureka:
   client:
@@ -70,3 +73,7 @@ management:
 vetclinic:
   clinic:
     zone: Asia/Ho_Chi_Minh              # Múi giờ vận hành phòng khám ("hôm nay" khi check-in, năm trong mã PET-/VIS-)
+  storage:
+    # Ảnh CĐHA: Docker volume imaging-data gắn vào /app/uploads/imaging (IMAGING_DIR trong docker-compose.yml)
+    imaging-dir: ${IMAGING_DIR:./uploads/imaging}
+    allowed-content-types: image/jpeg,image/png,application/dicom

@@ -35,6 +35,8 @@ public final class TestData {
     public static final long RECEPTIONIST = 9L;
     public static final long DOCTOR = 21L;
     public static final long OTHER_DOCTOR = 22L;
+    public static final long LAB_TECH = 31L;
+    public static final long IMAGING_TECH = 41L;
 
     private TestData() {
     }

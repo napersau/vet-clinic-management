@@ -6,10 +6,8 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * Hồ sơ một đợt khám. services chỉ có ở API chi tiết, null ở các API danh sách. Kết quả xét nghiệm / ảnh CĐHA
- * (labResults, imagingResults) thêm ở NV3.
+ * Hồ sơ một đợt khám. services / labResults / imagingResults chỉ có ở API chi tiết, null ở các API danh sách.
  * locked = true từ lúc Bác sĩ chốt chuyên môn (WAITING_PAYMENT trở đi): không được sửa chẩn đoán, dịch vụ, đơn thuốc (BR-27).
- * scheduledAt != null: khách có hẹn check-in đúng khung giờ (ưu tiên 2 của hàng đợi sảnh).
  */
 public record VisitResponse(
         Long id,
@@ -40,6 +38,8 @@ public record VisitResponse(
         Instant startedAt,
         Instant closedAt,
         Instant completedAt,
-        List<ServiceDetailResponse> services
+        List<ServiceDetailResponse> services,
+        List<LabResultResponse> labResults,
+        List<ImagingResultResponse> imagingResults
 ) {
 }

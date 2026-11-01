@@ -341,3 +341,56 @@ CREATE TABLE visit_service_detail_histories (
     KEY idx_vsdh_detail (visit_service_detail_id),
     CONSTRAINT fk_vsdh_vsd FOREIGN KEY (visit_service_detail_id) REFERENCES visit_service_details (id) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- PHẦN 3d. pet_clinic_clinical_db - kết quả cận lâm sàng (NV3): lab_test_results, imaging_results, imaging_attachments.
+-- Đủ 13 bảng của clinical-service.
+-- ---------------------------------------------------------------------------------------------------------------------
+
+-- min/max_value_snapshot: khoảng tham chiếu CỦA LOÀI tại thời điểm nhập (BR-24), Admin sửa khoảng sau đó không đổi kết quả cũ.
+-- performed_by -> auth_db.users (khóa ngoại logic).
+CREATE TABLE lab_test_results (
+    id                      BIGINT        NOT NULL AUTO_INCREMENT,
+    visit_service_detail_id BIGINT        NOT NULL,
+    lab_test_item_id        BIGINT        NOT NULL,
+    result_value            DECIMAL(8, 2) NOT NULL,
+    min_value_snapshot      DECIMAL(8, 2) NOT NULL,
+    max_value_snapshot      DECIMAL(8, 2) NOT NULL,
+    evaluation              ENUM ('LOW', 'NORMAL', 'HIGH') NOT NULL,
+    performed_by            BIGINT        NOT NULL,
+    notes                   TEXT          NULL,
+    created_at              TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY fk_ltr_item (lab_test_item_id),
+    KEY idx_ltr_vsd (visit_service_detail_id),
+    KEY idx_ltr_performer (performed_by),
+    CONSTRAINT fk_ltr_item FOREIGN KEY (lab_test_item_id) REFERENCES lab_test_items (id),
+    CONSTRAINT fk_ltr_vsd FOREIGN KEY (visit_service_detail_id) REFERENCES visit_service_details (id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- Mỗi chỉ định CĐHA có tối đa một kết quả (UNIQUE visit_service_detail_id)
+CREATE TABLE imaging_results (
+    id                      BIGINT    NOT NULL AUTO_INCREMENT,
+    visit_service_detail_id BIGINT    NOT NULL,
+    description             TEXT      NOT NULL,
+    conclusion              TEXT      NOT NULL,
+    performed_by            BIGINT    NOT NULL,
+    performed_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY visit_service_detail_id (visit_service_detail_id),
+    KEY idx_ir_performer (performed_by),
+    CONSTRAINT fk_ir_vsd FOREIGN KEY (visit_service_detail_id) REFERENCES visit_service_details (id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- file_url: đường dẫn tương đối trong thư mục ảnh (vd. 12/<uuid>.jpg), tên trên đĩa luôn là UUID; file_name là tên gốc để hiển thị
+CREATE TABLE imaging_attachments (
+    id                BIGINT       NOT NULL AUTO_INCREMENT,
+    imaging_result_id BIGINT       NOT NULL,
+    file_url          VARCHAR(500) NOT NULL,
+    file_name         VARCHAR(255) NOT NULL,
+    file_size         BIGINT       NULL,
+    content_type      VARCHAR(50)  NULL,
+    PRIMARY KEY (id),
+    KEY fk_ia_result (imaging_result_id),
+    CONSTRAINT fk_ia_result FOREIGN KEY (imaging_result_id) REFERENCES imaging_results (id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
