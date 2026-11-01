@@ -516,6 +516,24 @@ public class VisitServiceImpl implements VisitService {
     // ================================================================== không cần người dùng đăng nhập
 
     @Override
+    @Transactional
+    public void completeAfterPayment(Long visitId, Long actorUserId) {
+        // Không tìm thấy là lỗi vĩnh viễn: ném lỗi để tin nhắn sau khi hết retry được đẩy sang DLQ cho người xem xét
+        PetVisit visit = support.lock(visitId);
+        switch (visit.getStatus()) {
+            case COMPLETED -> log.debug("Đợt khám {} đã COMPLETED, bỏ qua sự kiện trùng", visit.getVisitCode());
+            case WAITING_PAYMENT -> {
+                visit.setCompletedAt(clock.instant());
+                support.transition(visit, VisitStatus.COMPLETED,
+                        actorUserId != null ? actorUserId : visit.getReceptionistId(),
+                        "Đã thanh toán và xuất thuốc xong, hoàn tất đợt khám");
+            }
+            default -> log.warn("Bỏ qua sự kiện thanh toán của đợt khám {} đang ở trạng thái {}",
+                    visit.getVisitCode(), visit.getStatus());
+        }
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<BillableServiceResponse> billableServices(Long visitId) {
         if (!visitRepository.existsById(visitId)) {

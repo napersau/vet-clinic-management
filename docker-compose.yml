@@ -62,7 +62,7 @@ services:
       # Ping qua TCP (127.0.0.1) và kiểm tra bảng cuối cùng của script: trong lúc init, MySQL chỉ mở socket,
       # nên `mysqladmin ping` sẽ báo healthy quá sớm khi schema chưa tạo xong.
       # Thêm database mới vào cuối schema_init.sql thì đổi bảng ở đây thành bảng tạo sau cùng.
-      test: ["CMD-SHELL", "mysql -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD -e 'SELECT 1 FROM pet_clinic_billing_pharmacy_db.prescription_items LIMIT 1' >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "mysql -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD -e 'SELECT 1 FROM pet_clinic_billing_pharmacy_db.invoice_items LIMIT 1' >/dev/null 2>&1"]
       <<: *healthcheck-timing
     networks: [vetclinic-net]
 
@@ -112,7 +112,7 @@ services:
       - "8080:8080"
     # Gateway khởi động SAU các service nghiệp vụ để lần lấy danh sách Eureka đầu tiên đã có đủ service:
     # "api-gateway healthy" nghĩa là cả hệ thống sẵn sàng nhận request.
-    # Đã chuyển auth, appointment, clinical, billing-pharmacy (NV4a); thêm notification-service vào đây khi chuyển xong
+    # Đã chuyển auth, appointment, clinical, billing-pharmacy; thêm notification-service vào đây khi chuyển xong
     # (hiện còn là khung Spring Initializr, chưa khởi động được).
     depends_on:
       service-registry:

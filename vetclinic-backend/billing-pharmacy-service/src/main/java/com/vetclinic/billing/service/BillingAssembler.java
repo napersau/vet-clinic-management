@@ -1,11 +1,17 @@
 package com.vetclinic.billing.service;
 
+import com.vetclinic.billing.constant.PaymentStatus;
 import com.vetclinic.billing.dto.response.InventoryTransactionResponse;
+import com.vetclinic.billing.dto.response.InvoiceItemResponse;
+import com.vetclinic.billing.dto.response.InvoiceResponse;
+import com.vetclinic.billing.dto.response.InvoiceSummaryResponse;
 import com.vetclinic.billing.dto.response.PrescriptionItemResponse;
 import com.vetclinic.billing.dto.response.PrescriptionResponse;
 import com.vetclinic.billing.dto.response.PrescriptionSummaryResponse;
 import com.vetclinic.billing.dto.response.VisitSummaryResponse;
 import com.vetclinic.billing.entity.InventoryTransaction;
+import com.vetclinic.billing.entity.Invoice;
+import com.vetclinic.billing.entity.InvoiceItem;
 import com.vetclinic.billing.entity.Medicine;
 import com.vetclinic.billing.entity.Prescription;
 import com.vetclinic.billing.entity.PrescriptionItem;
@@ -17,18 +23,17 @@ import java.util.List;
 /**
  * Entity -> DTO. Việc dựng từ entity (cần transaction để đọc collection lười) tách khỏi việc làm giàu bằng dữ liệu của
  * clinical-service (withVisit, gọi Feign ngoài transaction): withVisit nhận visit == null thì trả nguyên bản.
- * Phần hóa đơn (InvoiceResponse, InvoiceSummaryResponse, isPaid) và invoiceId / invoiceStatus của đơn thuốc thêm ở NV4b.
  */
 @Component
 public class BillingAssembler {
 
     // ------------------------------------------------------------------ đơn thuốc
 
-    /** invoiceId / invoiceStatus để null cho tới khi có hóa đơn (NV4b). */
-    public PrescriptionResponse toResponse(Prescription prescription) {
+    public PrescriptionResponse toResponse(Prescription prescription, Invoice invoice) {
         List<PrescriptionItemResponse> items = prescription.getItems().stream().map(this::toResponse).toList();
         return new PrescriptionResponse(prescription.getId(), prescription.getVisitId(), null, null,
-                prescription.getStatus(), prescription.getDoctorNotes(), total(prescription), null, null,
+                prescription.getStatus(), prescription.getDoctorNotes(), total(prescription),
+                invoice == null ? null : invoice.getId(), invoice == null ? null : invoice.getPaymentStatus(),
                 prescription.getDispensedBy(), prescription.getDispensedAt(), prescription.getCreatedAt(), items);
     }
 
@@ -68,10 +73,55 @@ public class BillingAssembler {
                 .reduce(BigDecimal.ZERO, BigDecimal::add));
     }
 
+    // ------------------------------------------------------------------ hóa đơn
+
+    public InvoiceResponse toResponse(Invoice invoice) {
+        List<InvoiceItemResponse> items = invoice.getItems().stream().map(this::toResponse).toList();
+        return new InvoiceResponse(invoice.getId(), invoice.getInvoiceCode(), invoice.getVisitId(), null, null, null,
+                invoice.getPrescriptionId(), invoice.getCashierId(), invoice.getTotalServiceAmount(),
+                invoice.getTotalMedicineAmount(), invoice.getTotalVatAmount(), invoice.getDiscountAmount(),
+                invoice.getFinalAmount(), invoice.getPaymentStatus(), invoice.getPaidAt(), invoice.getNotes(),
+                invoice.getCreatedAt(), items);
+    }
+
+    public InvoiceResponse withVisit(InvoiceResponse r, VisitSummaryResponse visit) {
+        if (visit == null) {
+            return r;
+        }
+        return new InvoiceResponse(r.id(), r.invoiceCode(), r.visitId(), visit.visitCode(), visit.petName(),
+                visit.ownerId(), r.prescriptionId(), r.cashierId(), r.totalServiceAmount(), r.totalMedicineAmount(),
+                r.totalVatAmount(), r.discountAmount(), r.finalAmount(), r.paymentStatus(), r.paidAt(), r.notes(),
+                r.createdAt(), r.items());
+    }
+
+    public InvoiceSummaryResponse toSummary(Invoice invoice) {
+        return new InvoiceSummaryResponse(invoice.getId(), invoice.getInvoiceCode(), invoice.getVisitId(), null, null,
+                invoice.getPrescriptionId(), invoice.getFinalAmount(), invoice.getPaymentStatus(), invoice.getPaidAt(),
+                invoice.getCreatedAt());
+    }
+
+    public InvoiceSummaryResponse withVisit(InvoiceSummaryResponse r, VisitSummaryResponse visit) {
+        if (visit == null) {
+            return r;
+        }
+        return new InvoiceSummaryResponse(r.id(), r.invoiceCode(), r.visitId(), visit.visitCode(), visit.petName(),
+                r.prescriptionId(), r.finalAmount(), r.paymentStatus(), r.paidAt(), r.createdAt());
+    }
+
+    private InvoiceItemResponse toResponse(InvoiceItem item) {
+        return new InvoiceItemResponse(item.getId(), item.getItemType(), item.getReferenceId(), item.getItemName(),
+                item.getQuantity(), item.getUnitPrice(), item.getVatRate(), item.getVatAmount(), item.getSubtotal());
+    }
+
     // ------------------------------------------------------------------ kho
 
     public InventoryTransactionResponse toResponse(InventoryTransaction t) {
         return new InventoryTransactionResponse(t.getId(), t.getMedicineId(), t.getTransactionType(), t.getQuantity(),
                 t.getBalanceAfter(), t.getReferenceId(), t.getNotes(), t.getCreatedBy(), t.getCreatedAt());
+    }
+
+    /** Hóa đơn đã thanh toán thì đơn thuốc mới được phát. */
+    public static boolean isPaid(Invoice invoice) {
+        return invoice != null && invoice.getPaymentStatus() == PaymentStatus.PAID;
     }
 }

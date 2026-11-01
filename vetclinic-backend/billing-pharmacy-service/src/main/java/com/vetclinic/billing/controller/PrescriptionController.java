@@ -12,19 +12,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-/**
- * Đơn thuốc điện tử. Chuyển trạng thái dùng POST theo quy chuẩn Action Endpoint.
- * Xuất thuốc (POST /{id}/dispense) và hàng đợi phát thuốc (?awaitingDispense=true) thêm ở NV4b cùng hóa đơn.
- */
+/** Đơn thuốc điện tử. Chuyển trạng thái dùng POST theo quy chuẩn Action Endpoint. */
 @RestController
 @RequestMapping("/api/v1/pharmacy/prescriptions")
 @RequiredArgsConstructor
@@ -40,7 +30,7 @@ public class PrescriptionController {
                 .body(ApiResponse.created("Đã lưu đơn thuốc", prescriptionService.create(request)));
     }
 
-    /** Sửa đơn (thay toàn bộ dòng thuốc) khi ca còn đang khám. */
+    /** Sửa đơn (thay toàn bộ dòng thuốc) khi ca còn đang khám và chưa có hóa đơn. */
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('VETERINARIAN')")
     public ResponseEntity<ApiResponse<PrescriptionResponse>> update(@PathVariable Long id,
@@ -48,14 +38,17 @@ public class PrescriptionController {
         return ResponseEntity.ok(ApiResponse.success("Đã cập nhật đơn thuốc", prescriptionService.update(id, request)));
     }
 
+    /** Danh sách đơn; awaitingDispense=true là hàng đợi phát thuốc của quầy (đơn đã thanh toán, chưa phát). */
     @GetMapping
     @PreAuthorize("hasAnyRole('RECEPTIONIST','VETERINARIAN','ADMIN')")
     public ResponseEntity<ApiResponse<PageResponse<PrescriptionSummaryResponse>>> search(
             @RequestParam(required = false) PrescriptionStatus status,
             @RequestParam(required = false) Long visitId,
+            @RequestParam(defaultValue = "false") boolean awaitingDispense,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(ApiResponse.success(prescriptionService.search(status, visitId, page, size)));
+        return ResponseEntity.ok(ApiResponse.success(
+                prescriptionService.search(status, visitId, awaitingDispense, page, size)));
     }
 
     /** UC-39: chủ nuôi chỉ xem được đơn của thú cưng mình. */
@@ -75,5 +68,12 @@ public class PrescriptionController {
     @PreAuthorize("hasAnyRole('VETERINARIAN','RECEPTIONIST','ADMIN')")
     public ResponseEntity<ApiResponse<PrescriptionResponse>> cancel(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success("Đã hủy đơn thuốc", prescriptionService.cancel(id)));
+    }
+
+    /** UC-36: xuất thuốc, trừ kho và hoàn tất ca khám. */
+    @PostMapping("/{id}/dispense")
+    @PreAuthorize("hasAnyRole('RECEPTIONIST','ADMIN')")
+    public ResponseEntity<ApiResponse<PrescriptionResponse>> dispense(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success("Đã xuất thuốc và hoàn tất ca khám", prescriptionService.dispense(id)));
     }
 }

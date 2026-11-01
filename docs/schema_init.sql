@@ -4,7 +4,7 @@
 -- Script không idempotent (MySQL 8 không có CREATE INDEX IF NOT EXISTS).
 --
 -- Hiện có: pet_clinic_auth_db (auth-service), pet_clinic_appointment_db (appointment-service),
--- pet_clinic_clinical_db (clinical-service, đủ 13 bảng), pet_clinic_billing_pharmacy_db (NV4a: kho dược, đơn thuốc).
+-- pet_clinic_clinical_db (clinical-service, đủ 13 bảng), pet_clinic_billing_pharmacy_db (đủ 6 bảng: kho dược, đơn thuốc, hóa đơn).
 -- Database / bảng của các phần khác được thêm vào CUỐI file khi chuyển phần đó.
 -- Bảng tạo SAU CÙNG phải trùng với bảng mà healthcheck của mysql-server trong docker-compose.yml kiểm tra.
 -- =====================================================================================================================
@@ -397,7 +397,7 @@ CREATE TABLE imaging_attachments (
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- PHẦN 4. pet_clinic_billing_pharmacy_db (billing-pharmacy-service) - NV4a: medicines, inventory_transactions,
--- prescriptions, prescription_items. Hai bảng hóa đơn (invoices, invoice_items) của NV4b thêm tiếp ở cuối file.
+-- prescriptions, prescription_items. Hai bảng hóa đơn (invoices, invoice_items) ở PHẦN 4b ngay bên dưới.
 -- visit_id / created_by / dispensed_by tham chiếu sang clinical_db, auth_db nên không có khóa ngoại vật lý.
 -- ---------------------------------------------------------------------------------------------------------------------
 CREATE DATABASE pet_clinic_billing_pharmacy_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -484,4 +484,57 @@ CREATE TABLE prescription_items (
     KEY fk_pi_medicine (medicine_id),
     CONSTRAINT fk_pi_medicine FOREIGN KEY (medicine_id) REFERENCES medicines (id),
     CONSTRAINT fk_pi_prescription FOREIGN KEY (prescription_id) REFERENCES prescriptions (id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- PHẦN 4b. pet_clinic_billing_pharmacy_db - hóa đơn (NV4b): invoices, invoice_items. Đủ 6 bảng của billing-pharmacy-service.
+-- ---------------------------------------------------------------------------------------------------------------------
+
+-- visit_id UNIQUE: mỗi đợt khám tối đa một hóa đơn (chống lập trùng khi nhận lại sự kiện chốt ca); hóa đơn đã hủy được dựng lại
+-- đúng dòng cũ (cùng id, cùng mã). prescription_id UNIQUE + ON DELETE SET NULL. cashier_id cho phép NULL: hóa đơn PENDING tự lập
+-- từ sự kiện lúc chưa có thu ngân, gán khi confirm-payment (CLAUDE.md §5.1 mục 2). version: khóa lạc quan (@Version).
+-- final_amount = Σsubtotal + Σvat - discount_amount, với discount_amount <= Σsubtotal + Σvat (EX-14).
+CREATE TABLE invoices (
+    id                   BIGINT        NOT NULL AUTO_INCREMENT,
+    invoice_code         VARCHAR(50)   NOT NULL,
+    visit_id             BIGINT        NOT NULL,
+    prescription_id      BIGINT        NULL DEFAULT NULL,
+    cashier_id           BIGINT        NULL DEFAULT NULL,
+    total_service_amount DECIMAL(12, 2) NOT NULL,
+    total_medicine_amount DECIMAL(12, 2) NOT NULL,
+    total_vat_amount     DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+    discount_amount      DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+    final_amount         DECIMAL(12, 2) NOT NULL,
+    payment_status       ENUM ('PENDING', 'PAID', 'CANCELLED') NOT NULL DEFAULT 'PENDING',
+    paid_at              TIMESTAMP     NULL DEFAULT NULL,
+    notes                TEXT          NULL,
+    created_at           TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at           TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    version              BIGINT        NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    UNIQUE KEY invoice_code (invoice_code),
+    UNIQUE KEY visit_id (visit_id),
+    UNIQUE KEY prescription_id (prescription_id),
+    KEY idx_invoices_visit (visit_id),
+    KEY idx_invoices_cashier (cashier_id),
+    KEY idx_invoices_status (payment_status),
+    CONSTRAINT fk_invoices_prescription FOREIGN KEY (prescription_id) REFERENCES prescriptions (id) ON DELETE SET NULL
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- reference_id = id dịch vụ (SERVICE, bên clinical_db) hoặc id thuốc (MEDICINE). vat_rate là phân số (0.10 = 10%), nên < 1.
+CREATE TABLE invoice_items (
+    id           BIGINT        NOT NULL AUTO_INCREMENT,
+    invoice_id   BIGINT        NOT NULL,
+    item_type    ENUM ('SERVICE', 'MEDICINE') NOT NULL,
+    reference_id BIGINT        NOT NULL,
+    item_name    VARCHAR(150)  NOT NULL,
+    quantity     INT           NOT NULL DEFAULT 1,
+    unit_price   DECIMAL(12, 2) NOT NULL,
+    vat_rate     DECIMAL(4, 2) NOT NULL DEFAULT 0.00,
+    vat_amount   DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+    subtotal     DECIMAL(12, 2) NOT NULL,
+    PRIMARY KEY (id),
+    KEY idx_ii_invoice (invoice_id),
+    KEY idx_ii_type (item_type),
+    CONSTRAINT fk_ii_invoice FOREIGN KEY (invoice_id) REFERENCES invoices (id) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;

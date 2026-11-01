@@ -595,6 +595,36 @@ class VisitServiceImplTest {
         assertThat(service.myVisits()).extracting(VisitResponse::id).containsExactly(100L, 101L);
     }
 
+    // ================================================================== thanh toán xong (từ sự kiện của billing)
+
+    @Test
+    void completeAfterPayment_movesWaitingPaymentToCompleted_andIsIdempotent() {
+        PetVisit visit = visit(100L, VisitStatus.WAITING_PAYMENT, DOCTOR);
+        when(visitRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(visit));
+
+        service.completeAfterPayment(100L, 9L);
+
+        assertThat(visit.getStatus()).isEqualTo(VisitStatus.COMPLETED);
+        assertThat(visit.getCompletedAt()).isNotNull();
+        assertThat(lastHistory().getChangedByUserId()).isEqualTo(9L);
+
+        service.completeAfterPayment(100L, 9L);   // nhận trùng sự kiện: không có thêm tác dụng
+        verify(historyRepository, times(1)).save(any());
+    }
+
+    @Test
+    void completeAfterPayment_ignoresVisitsThatAreNotWaitingForPayment_andFailsForUnknownVisit() {
+        PetVisit visit = visit(100L, VisitStatus.IN_PROGRESS, DOCTOR);
+        when(visitRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(visit));
+        when(visitRepository.findByIdForUpdate(99L)).thenReturn(Optional.empty());
+
+        service.completeAfterPayment(100L, 9L);
+        assertThat(visit.getStatus()).isEqualTo(VisitStatus.IN_PROGRESS);
+
+        // Không tìm thấy là lỗi vĩnh viễn: ném lỗi để tin nhắn vào DLQ
+        assertError(ErrorCode.VISIT_NOT_FOUND, () -> service.completeAfterPayment(99L, 9L));
+    }
+
     // ================================================================== nội bộ (cho billing-pharmacy-service)
 
     @Test

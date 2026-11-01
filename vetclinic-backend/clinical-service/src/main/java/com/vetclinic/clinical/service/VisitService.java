@@ -19,7 +19,7 @@ import java.util.List;
 
 /**
  * Vòng đời một đợt khám ngoại trú hai pha (SM-01): tiếp nhận, hàng đợi, phân công, hủy (NV1) và khám hai giai đoạn (NV2).
- * Hoàn tất sau thanh toán (NV4b) và mở lại ca (NV5) bổ sung sau.
+ * Mở lại ca đã chốt (NV5) bổ sung sau.
  */
 public interface VisitService {
 
@@ -64,7 +64,10 @@ public interface VisitService {
     /** Danh sách ca của Bác sĩ đang đăng nhập: chờ vào phòng, đang khám, chờ tái khám. */
     List<VisitResponse> myVisits();
 
-    // ------------------------------------------------------------------ không cần người dùng đăng nhập (/internal)
+    // ------------------------------------------------------------------ không cần người dùng đăng nhập (/internal, sự kiện)
+
+    /** Consumer của PaymentAndDispenseCompletedEvent: WAITING_PAYMENT -> COMPLETED. Idempotent. */
+    void completeAfterPayment(Long visitId, Long actorUserId);
 
     /** Cho billing-pharmacy-service lập hóa đơn: chỉ dịch vụ COMPLETED. */
     List<BillableServiceResponse> billableServices(Long visitId);
